@@ -37,7 +37,6 @@
   .view-block { margin-bottom: 12px; }
   .view-block .view-title { font-size: 13px; color: #34495e; margin-bottom: 4px; font-weight: bold; padding-left: 7px; border-left: 5px solid transparent; }
   .view-title.vt-front { color: #c62828; border-left-color: #e53935; }
-  .view-title.vt-left  { color: #1565c0; border-left-color: #1e88e5; }
   .view-title.vt-top   { color: #2e7d32; border-left-color: #43a047; }
   .grid5 {
     display: grid; grid-template-columns: repeat(5, 1fr); gap: 3px;
@@ -157,7 +156,7 @@
     <div class="grid5" id="gridFront"></div>
   </div>
   <div class="view-block">
-    <div class="view-title vt-left">左视图（Z→ / Y↑）</div>
+    <div class="view-title">左视图（Z→ / Y↑）</div>
     <div class="grid5" id="gridLeft"></div>
   </div>
   <div class="view-block">
@@ -336,10 +335,8 @@ ground.position.y = GROUND_TOP;
 ground.receiveShadow = true;
 scene.add(ground);
 
-// Side colors that identify which face is the front (正面) vs the left (左面),
-// matching the 正视图 / 左视图 headers in the side panel.
+// Color the front face so the build's orientation is obvious; matches the 正视图 header.
 const FRONT_COLOR = 0xe53935; // 正面 — front view is seen from +Z
-const LEFT_COLOR = 0x1e88e5;  // 左面 — left view is seen from +X
 const SIDE_COLOR = 0x8d6e63;  // neutral brown for the other sides
 
 // Raised platform (pedestal) the build sits on: spans from below the grass up to
@@ -352,7 +349,7 @@ const sideMat = () => new THREE.MeshLambertMaterial({ color: SIDE_COLOR });
 const base = new THREE.Mesh(
   new THREE.BoxGeometry(300, platformHeight, 300),
   [
-    new THREE.MeshLambertMaterial({ color: LEFT_COLOR }),  // +X = left face
+    sideMat(),                                             // +X
     sideMat(),                                             // -X
     sideMat(),                                             // +Y (hidden under cap)
     sideMat(),                                             // -Y
@@ -399,11 +396,6 @@ function makeFaceLabel(text, color) {
 const frontLabel = makeFaceLabel('正面', '#c62828');
 frontLabel.position.set(0, 92, 151);
 scene.add(frontLabel);
-
-const leftLabel = makeFaceLabel('左面', '#1565c0');
-leftLabel.rotation.y = Math.PI / 2;
-leftLabel.position.set(151, 92, 0);
-scene.add(leftLabel);
 
 // Grid helper on the platform top surface (opacity 0.5)
 const grid = new THREE.GridHelper(250, 5, 0x33691e, 0x558b2f);
@@ -932,7 +924,7 @@ function flyTo(pos, look) {
 }
 
 function viewFront() { flyTo(new THREE.Vector3(0, WORLD_CENTER.y, 660), WORLD_CENTER.clone()); }
-function viewLeft()  { flyTo(new THREE.Vector3(660, WORLD_CENTER.y, 0), WORLD_CENTER.clone()); }
+function viewLeft()  { flyTo(new THREE.Vector3(-660, WORLD_CENTER.y, 0), WORLD_CENTER.clone()); }
 function viewTop()   { flyTo(new THREE.Vector3(0, 840 + LIFT, 0.001), WORLD_CENTER.clone()); }
 function viewOrbit() { flyTo(new THREE.Vector3(380, 300 + LIFT, 460), WORLD_CENTER.clone()); showToast('环视视角：拖动旋转，滚轮缩放'); }
 
