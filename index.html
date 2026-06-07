@@ -35,7 +35,10 @@
   }
   #viewsPanel h2 { font-size: 15px; color: #2b3a55; margin-bottom: 8px; text-align: center; }
   .view-block { margin-bottom: 12px; }
-  .view-block .view-title { font-size: 13px; color: #34495e; margin-bottom: 4px; font-weight: bold; }
+  .view-block .view-title { font-size: 13px; color: #34495e; margin-bottom: 4px; font-weight: bold; padding-left: 7px; border-left: 5px solid transparent; }
+  .view-title.vt-front { color: #c62828; border-left-color: #e53935; }
+  .view-title.vt-left  { color: #1565c0; border-left-color: #1e88e5; }
+  .view-title.vt-top   { color: #2e7d32; border-left-color: #43a047; }
   .grid5 {
     display: grid; grid-template-columns: repeat(5, 1fr); gap: 3px;
     width: 130px; padding: 4px; background: #cfd8dc; border-radius: 6px;
@@ -150,15 +153,15 @@
 <div id="viewsPanel">
   <h2>三视图对照</h2>
   <div class="view-block">
-    <div class="view-title">正视图（X→ / Y↑）</div>
+    <div class="view-title vt-front">正视图（X→ / Y↑）</div>
     <div class="grid5" id="gridFront"></div>
   </div>
   <div class="view-block">
-    <div class="view-title">左视图（Z→ / Y↑）</div>
+    <div class="view-title vt-left">左视图（Z→ / Y↑）</div>
     <div class="grid5" id="gridLeft"></div>
   </div>
   <div class="view-block">
-    <div class="view-title">俯视图（X→ / Z↓）</div>
+    <div class="view-title vt-top">俯视图（X→ / Z↓）</div>
     <div class="grid5" id="gridTop"></div>
   </div>
   <div id="editHint"></div>
@@ -333,19 +336,36 @@ ground.position.y = GROUND_TOP;
 ground.receiveShadow = true;
 scene.add(ground);
 
-// Raised platform (pedestal) the build sits on: spans from below the grass up to PLATFORM_TOP
+// Side colors that identify which face is the front (正面) vs the left (左面),
+// matching the 正视图 / 左视图 headers in the side panel.
+const FRONT_COLOR = 0xe53935; // 正面 — front view is seen from +Z
+const LEFT_COLOR = 0x1e88e5;  // 左面 — left view is seen from +X
+const SIDE_COLOR = 0x8d6e63;  // neutral brown for the other sides
+
+// Raised platform (pedestal) the build sits on: spans from below the grass up to
+// just under the grass cap (kept below the cap top to avoid z-fighting).
 const platformBottom = GROUND_TOP - 40;
-const platformHeight = PLATFORM_TOP - platformBottom;
+const platformTopY = PLATFORM_TOP - 8;
+const platformHeight = platformTopY - platformBottom;
+const sideMat = () => new THREE.MeshLambertMaterial({ color: SIDE_COLOR });
+// BoxGeometry material order: +X, -X, +Y, -Y, +Z, -Z
 const base = new THREE.Mesh(
   new THREE.BoxGeometry(300, platformHeight, 300),
-  new THREE.MeshLambertMaterial({ color: 0x8d6e63 })
+  [
+    new THREE.MeshLambertMaterial({ color: LEFT_COLOR }),  // +X = left face
+    sideMat(),                                             // -X
+    sideMat(),                                             // +Y (hidden under cap)
+    sideMat(),                                             // -Y
+    new THREE.MeshLambertMaterial({ color: FRONT_COLOR }), // +Z = front face
+    sideMat(),                                             // -Z
+  ]
 );
-base.position.set(0, (PLATFORM_TOP + platformBottom) / 2, 0);
+base.position.set(0, (platformTopY + platformBottom) / 2, 0);
 base.receiveShadow = true;
 base.castShadow = true;
 scene.add(base);
 
-// Grass-topped lip so the platform reads as a raised patch of ground
+// Grass-topped cap so the platform reads as a raised patch of ground
 const platformTopFace = new THREE.Mesh(
   new THREE.BoxGeometry(306, 10, 306),
   new THREE.MeshLambertMaterial({ map: grassTex })
@@ -353,6 +373,37 @@ const platformTopFace = new THREE.Mesh(
 platformTopFace.position.set(0, PLATFORM_TOP - 5, 0);
 platformTopFace.receiveShadow = true;
 scene.add(platformTopFace);
+
+// Text labels on the front / left faces so the orientation is unmistakable.
+function makeFaceLabel(text, color) {
+  const c = document.createElement('canvas');
+  c.width = 256; c.height = 128;
+  const g = c.getContext('2d');
+  g.clearRect(0, 0, 256, 128);
+  g.fillStyle = 'rgba(255,255,255,0.92)';
+  const r = 18;
+  g.beginPath();
+  g.moveTo(r, 6); g.arcTo(250, 6, 250, 122, r); g.arcTo(250, 122, 6, 122, r);
+  g.arcTo(6, 122, 6, 6, r); g.arcTo(6, 6, 250, 6, r); g.closePath(); g.fill();
+  g.lineWidth = 8; g.strokeStyle = color; g.stroke();
+  g.fillStyle = color;
+  g.font = 'bold 76px "Microsoft YaHei", "PingFang SC", sans-serif';
+  g.textAlign = 'center'; g.textBaseline = 'middle';
+  g.fillText(text, 128, 70);
+  const tex = new THREE.CanvasTexture(c);
+  tex.anisotropy = 4;
+  const mat = new THREE.MeshBasicMaterial({ map: tex, transparent: true });
+  return new THREE.Mesh(new THREE.PlaneGeometry(150, 75), mat);
+}
+
+const frontLabel = makeFaceLabel('正面', '#c62828');
+frontLabel.position.set(0, 92, 151);
+scene.add(frontLabel);
+
+const leftLabel = makeFaceLabel('左面', '#1565c0');
+leftLabel.rotation.y = Math.PI / 2;
+leftLabel.position.set(151, 92, 0);
+scene.add(leftLabel);
 
 // Grid helper on the platform top surface (opacity 0.5)
 const grid = new THREE.GridHelper(250, 5, 0x33691e, 0x558b2f);
@@ -694,12 +745,16 @@ function currentPlayerBlocks() {
 /* =========================================================================
    Levels
    ========================================================================= */
+// Every level is fully supported: each block sits on the ground (gy 0) or directly
+// on top of another block, so the whole shape can be built by stacking — no floating
+// or cantilevered blocks are ever required.
 const LEVELS = [
   {
-    name: '第一关：经典T型',
+    name: '第一关：方块小塔',
     blocks: [
-      { gx: 2, gy: 0, gz: 2 }, { gx: 2, gy: 1, gz: 2 }, { gx: 2, gy: 2, gz: 2 },
-      { gx: 1, gy: 2, gz: 2 }, { gx: 3, gy: 2, gz: 2 },
+      { gx: 1, gy: 0, gz: 1 }, { gx: 2, gy: 0, gz: 1 },
+      { gx: 1, gy: 0, gz: 2 }, { gx: 2, gy: 0, gz: 2 },
+      { gx: 1, gy: 1, gz: 1 },
     ],
   },
   {
@@ -707,7 +762,7 @@ const LEVELS = [
     blocks: [
       { gx: 1, gy: 0, gz: 1 }, { gx: 3, gy: 0, gz: 1 },
       { gx: 1, gy: 0, gz: 3 }, { gx: 3, gy: 0, gz: 3 },
-      { gx: 2, gy: 1, gz: 2 },
+      { gx: 2, gy: 0, gz: 2 }, { gx: 2, gy: 1, gz: 2 },
     ],
   },
   {
