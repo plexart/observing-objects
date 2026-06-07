@@ -35,9 +35,7 @@
   }
   #viewsPanel h2 { font-size: 15px; color: #2b3a55; margin-bottom: 8px; text-align: center; }
   .view-block { margin-bottom: 12px; }
-  .view-block .view-title { font-size: 13px; color: #34495e; margin-bottom: 4px; font-weight: bold; padding-left: 7px; border-left: 5px solid transparent; }
-  .view-title.vt-front { color: #c62828; border-left-color: #e53935; }
-  .view-title.vt-top   { color: #2e7d32; border-left-color: #43a047; }
+  .view-block .view-title { font-size: 13px; color: #34495e; margin-bottom: 4px; font-weight: bold; text-align: center; }
   .grid5 {
     display: grid; grid-template-columns: repeat(5, 1fr); gap: 3px;
     width: 130px; padding: 4px; background: #cfd8dc; border-radius: 6px;
@@ -80,24 +78,156 @@
   /* Bottom virtual controls */
   #touchControls { position: fixed; bottom: 14px; left: 0; right: 0; z-index: 50; pointer-events: none; }
   #touchControls .pad { position: absolute; pointer-events: auto; }
-  #movePad { left: 16px; bottom: 0; display: grid; grid-template-columns: repeat(3, 56px); grid-template-rows: repeat(3, 56px); gap: 6px; }
+  #movePad {
+    left: 16px; bottom: 20px;
+    display: grid;
+    grid-template-columns: repeat(3, 56px);
+    grid-template-rows: repeat(5, 56px);
+    gap: 6px;
+    transform-style: preserve-3d;
+    transform: rotateX(60deg) rotateY(-8deg) translateY(40px);
+    perspective: 200px;
+  }
   #actionPad { right: 16px; bottom: 0; display: grid; grid-template-columns: repeat(2, 64px); grid-template-rows: repeat(2, 64px); gap: 8px; }
   .vbtn {
-    border: none; border-radius: 12px; background: rgba(38,50,56,0.78); color: #fff; font-size: 18px;
+    border: none; border-radius: 12px; color: #fff; font-size: 18px;
     font-weight: 700; display: flex; align-items: center; justify-content: center; cursor: pointer;
-    box-shadow: 0 3px 8px rgba(0,0,0,0.35); touch-action: none; -webkit-user-select: none; user-select: none;
+    touch-action: none; -webkit-user-select: none; user-select: none;
+    position: relative;
+    transform-style: preserve-3d;
+    transition: all 0.3s ease;
   }
-  .vbtn:active, .vbtn.held { background: #ff7043; transform: scale(0.94); }
+  .vbtn:active, .vbtn.held { background: #ff7043 !important; transform: scale(0.95) !important; }
   .vbtn.wide { font-size: 24px; }
-  #vW { grid-column: 2; grid-row: 1; }
-  #vA { grid-column: 1; grid-row: 2; }
-  #vS { grid-column: 2; grid-row: 2; }
-  #vD { grid-column: 3; grid-row: 2; }
-  #vUp { grid-column: 1; grid-row: 1; }
-  #vDown { grid-column: 3; grid-row: 1; }
-  #vShift { grid-column: 1 / span 1; grid-row: 3; }
-  #vPlace { grid-column: 1; grid-row: 1 / span 2; height: 100%; }
-  #vDestroy { grid-column: 2; grid-row: 1 / span 2; height: 100%; }
+
+  /* 3D Platform under WASD */
+  .platform-base {
+    position: absolute;
+    width: 180px; height: 180px;
+    left: 50%; top: 50%;
+    transform: translate(-50%, -50%) translateZ(-10px);
+    background: linear-gradient(135deg, rgba(55,71,79,0.4) 0%, rgba(38,50,56,0.5) 100%);
+    border-radius: 16px;
+    border: 2px solid rgba(255,255,255,0.1);
+    box-shadow: 0 10px 30px rgba(0,0,0,0.5);
+    pointer-events: none;
+  }
+  .platform-base::before {
+    content: '';
+    position: absolute;
+    inset: 0;
+    background: repeating-linear-gradient(
+      0deg,
+      transparent,
+      transparent 10px,
+      rgba(255,255,255,0.03) 10px,
+      rgba(255,255,255,0.03) 11px
+    ),
+    repeating-linear-gradient(
+      90deg,
+      transparent,
+      transparent 10px,
+      rgba(255,255,255,0.03) 10px,
+      rgba(255,255,255,0.03) 11px
+    );
+    border-radius: 14px;
+  }
+
+  /* Q button - floating high above */
+  #vQ {
+    grid-column: 2; grid-row: 1;
+    transform: translateZ(45px) translateY(-8px);
+    background: linear-gradient(145deg, rgba(76, 175, 80, 0.95), rgba(56, 142, 60, 0.9));
+    box-shadow:
+      0 8px 25px rgba(0,0,0,0.5),
+      0 0 20px rgba(76, 175, 80, 0.5),
+      inset 0 1px 2px rgba(255,255,255,0.3);
+    animation: floatQ 3s ease-in-out infinite;
+  }
+  @keyframes floatQ {
+    0%, 100% { transform: translateZ(45px) translateY(-8px); }
+    50% { transform: translateZ(50px) translateY(-10px); }
+  }
+  /* Shadow cast by Q onto the platform */
+  #vQ::after {
+    content: '';
+    position: absolute;
+    width: 50px; height: 50px;
+    background: radial-gradient(ellipse, rgba(0,0,0,0.4) 0%, transparent 70%);
+    transform: translateZ(-45px) translateY(8px);
+    border-radius: 50%;
+    filter: blur(4px);
+  }
+
+  /* WASD buttons - on the surface */
+  #vW, #vA, #vS, #vD {
+    background: linear-gradient(145deg, rgba(55,71,79,0.95), rgba(38,50,56,0.9));
+    box-shadow:
+      0 4px 12px rgba(0,0,0,0.4),
+      inset 0 1px 2px rgba(255,255,255,0.15),
+      inset 0 -1px 2px rgba(0,0,0,0.2);
+    border: 1px solid rgba(255,255,255,0.1);
+  }
+  #vW { grid-column: 2; grid-row: 2; transform: translateZ(0); }
+  #vA { grid-column: 1; grid-row: 3; transform: translateZ(0); }
+  #vS { grid-column: 2; grid-row: 4; transform: translateZ(0); }
+  #vD { grid-column: 3; grid-row: 3; transform: translateZ(0); }
+
+  /* E button - sunk below */
+  #vE {
+    grid-column: 2; grid-row: 5;
+    transform: translateZ(-35px) translateY(8px);
+    background: linear-gradient(145deg, rgba(183, 28, 28, 0.85), rgba(136, 14, 79, 0.8));
+    box-shadow:
+      inset 0 4px 12px rgba(0,0,0,0.6),
+      0 2px 4px rgba(0,0,0,0.3);
+    opacity: 0.85;
+    animation: sinkE 3s ease-in-out infinite;
+  }
+  @keyframes sinkE {
+    0%, 100% { transform: translateZ(-35px) translateY(8px); }
+    50% { transform: translateZ(-40px) translateY(10px); }
+  }
+  /* Underground glow for E */
+  #vE::before {
+    content: '';
+    position: absolute;
+    inset: -4px;
+    border-radius: 14px;
+    background: radial-gradient(ellipse at center, rgba(244, 67, 54, 0.3) 0%, transparent 70%);
+    z-index: -1;
+  }
+
+  /* Depth indicator lines */
+  .depth-line {
+    position: absolute;
+    width: 2px;
+    background: linear-gradient(to bottom, rgba(76,175,80,0.6), rgba(76,175,80,0.2));
+    left: 50%; transform: translateX(-50%);
+    pointer-events: none;
+  }
+  #lineUp {
+    height: 35px;
+    top: 28px;
+    transform: translateX(-50%) translateZ(0);
+  }
+  #lineDown {
+    height: 30px;
+    bottom: 28px;
+    background: linear-gradient(to bottom, rgba(244,67,54,0.2), rgba(244,67,54,0.6));
+  }
+
+  #vShift { display: none; }
+  #vPlace {
+    grid-column: 1; grid-row: 1 / span 2; height: 100%;
+    background: rgba(38,50,56,0.78);
+    box-shadow: 0 3px 8px rgba(0,0,0,0.35);
+  }
+  #vDestroy {
+    grid-column: 2; grid-row: 1 / span 2; height: 100%;
+    background: rgba(38,50,56,0.78);
+    box-shadow: 0 3px 8px rgba(0,0,0,0.35);
+  }
 
   /* Lock / play overlay */
   #lockOverlay {
@@ -152,15 +282,15 @@
 <div id="viewsPanel">
   <h2>三视图对照</h2>
   <div class="view-block">
-    <div class="view-title vt-front">正视图（X→ / Y↑）</div>
+    <div class="view-title">正(前)</div>
     <div class="grid5" id="gridFront"></div>
   </div>
   <div class="view-block">
-    <div class="view-title">左视图（Z→ / Y↑）</div>
+    <div class="view-title">左(左)</div>
     <div class="grid5" id="gridLeft"></div>
   </div>
   <div class="view-block">
-    <div class="view-title vt-top">俯视图（X→ / Z↓）</div>
+    <div class="view-title">俯(上)</div>
     <div class="grid5" id="gridTop"></div>
   </div>
   <div id="editHint"></div>
@@ -171,6 +301,7 @@
   <span id="levelName">第一关：经典T型</span>
   <button class="btn green" id="btnSubmit">提交验证！</button>
   <button class="btn orange" id="btnDemo">答案演示</button>
+  <button class="btn" id="btnRandom">🎲 随机关卡</button>
   <button class="btn red" id="btnClear">清空</button>
   <button class="btn teal" id="btnFree">老师：自由画图出题</button>
   <button class="btn grey" id="btnSave" style="display:none;">✏️ 保存当前画的题</button>
@@ -182,18 +313,21 @@
   <button class="btn" id="btnViewLeft">🎥 看左视图</button>
   <button class="btn" id="btnViewTop">🚁 看俯视图</button>
   <button class="btn" id="btnOrbit">🧭 环视视角</button>
-  <button class="btn grey" id="btnRoam">🏃 切回漫游</button>
+  <button class="btn" id="btnRoam">🏃 漫游模式 (R)</button>
 </div>
 
 <!-- Touch / virtual controls -->
 <div id="touchControls">
   <div class="pad" id="movePad">
-    <button class="vbtn" id="vUp" title="上升 (Space)">⬆️</button>
+    <div class="platform-base"></div>
+    <div class="depth-line" id="lineUp"></div>
+    <div class="depth-line" id="lineDown"></div>
+    <button class="vbtn" id="vQ">Q</button>
     <button class="vbtn" id="vW">W</button>
-    <button class="vbtn" id="vDown" title="下降 (Ctrl)">⬇️</button>
     <button class="vbtn" id="vA">A</button>
     <button class="vbtn" id="vS">S</button>
     <button class="vbtn" id="vD">D</button>
+    <button class="vbtn" id="vE">E</button>
     <button class="vbtn wide" id="vShift" title="加速 (Shift)">🚀</button>
   </div>
   <div class="pad" id="actionPad">
@@ -207,11 +341,12 @@
   <div class="card">
     <h1>第一人称漫游模式</h1>
     <p>
-      用 <b>WASD</b> 移动，<b>鼠标</b> 转动视角，<b>空格</b> 上升 / <b>Ctrl</b> 下降，<b>Shift</b> 加速。<br />
-      <b>左键</b> 放置积木 🧱，<b>右键</b> 拆除积木 ⛏️。<br />
-      想用更简单的方式？点上方「🧭 环视视角」可拖动旋转、点击放置。
+      用 <b>WASD</b> 或 <b>方向键</b> 移动，<b>鼠标</b> 转动视角<br />
+      <b>Q/E</b> 上升/下降（或 空格/Ctrl）<br />
+      使用右下角的 <b>🧱 ⛏️</b> 按钮放置/拆除积木<br />
+      按 <b>R</b> 或 <b>ESC</b> 返回环视模式
     </p>
-    <p class="play">点击此处 / 按 <b>E</b> 锁定鼠标开始</p>
+    <p class="play">点击画面开始漫游</p>
   </div>
 </div>
 
@@ -452,7 +587,7 @@ orbit.enableDamping = true;
 orbit.dampingFactor = 0.08;
 orbit.minDistance = 200;
 orbit.maxDistance = 1600;
-orbit.maxPolarAngle = Math.PI * 0.515; // allow a level front/left view, but not under the ground
+orbit.maxPolarAngle = Math.PI * 0.6; // allow looking down enough to see ground, prevent straight down
 orbit.update();
 
 // First-person roam (pointer lock) — optional, behind 切回漫游
@@ -470,18 +605,24 @@ function setMode(next) {
   mode = next;
   if (next === 'orbit') {
     if (controls.isLocked) controls.unlock();
+    // Sync orbit state to current camera position to avoid visual changes
+    const direction = new THREE.Vector3();
+    camera.getWorldDirection(direction);
+    const currentDist = orbit.target.distanceTo(camera.position);
+    orbit.target.copy(camera.position).add(direction.multiplyScalar(Math.max(currentDist, 400)));
+    orbit.update();  // Sync orbit controls to new target/position
     orbit.enabled = true;
     camera.up.set(0, 1, 0);
     crosshair.style.display = 'none';
     lockOverlay.classList.add('hidden');
     movePad.style.display = 'none';
-    hud.innerHTML = '🖱️ 拖动旋转 · 滚轮缩放 · 点击空地/方块放置 · 右键(或 ⛏️)拆除';
+    hud.innerHTML = '🖱️ 拖动旋转 · 滚轮缩放 · 点击空地/方块放置 · 右键(或 ⛏️)拆除 · 按 R 切漫游';
   } else {
     orbit.enabled = false;
     camera.up.set(0, 1, 0);
     crosshair.style.display = '';
     movePad.style.display = '';
-    hud.innerHTML = '按 <b>E</b> 锁定/解锁鼠标 · 左键放置 · 右键拆除';
+    hud.innerHTML = 'WASD/方向键移动 · Q/E 上下 · 按 R 或 ESC 返回环视';
     lockOverlay.classList.remove('hidden');
   }
 }
@@ -604,12 +745,19 @@ function activeNDC() { return mode === 'roam' ? centerNDC : pointerNDC; }
 
 let currentPlacement = null;
 function updatePreview() {
-  let show = !animatingCamera;
-  if (mode === 'roam') show = show && controls.isLocked;
-  else show = show && pointerOverCanvas;
-  if (!show) { preview.visible = false; currentPlacement = null; return; }
+  // No preview in roam mode
+  if (mode === 'roam' || animatingCamera) {
+    preview.visible = false;
+    currentPlacement = null;
+    return;
+  }
+  if (!pointerOverCanvas) {
+    preview.visible = false;
+    currentPlacement = null;
+    return;
+  }
 
-  const cand = computeCandidate(activeNDC());
+  const cand = computeCandidate(pointerNDC);
   if (cand && !blocks.has(keyOf(cand.gx, cand.gy, cand.gz))) {
     preview.position.copy(worldOf(cand.gx, cand.gy, cand.gz));
     preview.visible = true;
@@ -623,17 +771,19 @@ function updatePreview() {
 /* =========================================================================
    Place / destroy actions (work in both modes; ndc = where to aim)
    ========================================================================= */
-function doPlace(ndc) {
+function doPlace(ndc, fromVirtualButton) {
   if (animatingCamera) return;
-  const cand = computeCandidate(ndc || activeNDC());
+  if (mode === 'roam' && !fromVirtualButton) return;
+  const cand = computeCandidate(ndc || (mode === 'roam' ? centerNDC : pointerNDC));
   if (cand && !blocks.has(keyOf(cand.gx, cand.gy, cand.gz))) {
     if (addBlock(cand.gx, cand.gy, cand.gz)) { swingHand(); sfxPlace(); }
   }
 }
 
-function doDestroy(ndc) {
+function doDestroy(ndc, fromVirtualButton) {
   if (animatingCamera) return;
-  raycaster.setFromCamera(ndc || activeNDC(), camera);
+  if (mode === 'roam' && !fromVirtualButton) return;
+  raycaster.setFromCamera(ndc || (mode === 'roam' ? centerNDC : pointerNDC), camera);
   const hits = raycaster.intersectObjects(blockMeshes, false);
   if (hits.length) {
     removeBlockMesh(hits[0].object);
@@ -748,29 +898,80 @@ function currentPlayerBlocks() {
 // or cantilevered blocks are ever required.
 const LEVELS = [
   {
-    name: '第一关：方块小塔',
+    name: '第一关：经典T型 (人教版典型)',
     blocks: [
-      { gx: 1, gy: 0, gz: 1 }, { gx: 2, gy: 0, gz: 1 },
+      { gx: 2, gy: 0, gz: 2 }, { gx: 1, gy: 0, gz: 2 },
+      { gx: 3, gy: 0, gz: 2 }, { gx: 2, gy: 1, gz: 2 },
+    ],
+  },
+  {
+    name: '第二关：前后遮挡 (易错考点)',
+    blocks: [
+      { gx: 2, gy: 0, gz: 1 }, { gx: 2, gy: 0, gz: 2 },
+      { gx: 3, gy: 0, gz: 2 }, { gx: 2, gy: 1, gz: 1 },
+    ],
+  },
+  {
+    name: '第三关：阶梯与盲区 (挑战)',
+    blocks: [
       { gx: 1, gy: 0, gz: 2 }, { gx: 2, gy: 0, gz: 2 },
-      { gx: 1, gy: 1, gz: 1 },
-    ],
-  },
-  {
-    name: '第二关：遮挡',
-    blocks: [
-      { gx: 1, gy: 0, gz: 1 }, { gx: 3, gy: 0, gz: 1 },
-      { gx: 1, gy: 0, gz: 3 }, { gx: 3, gy: 0, gz: 3 },
-      { gx: 2, gy: 0, gz: 2 }, { gx: 2, gy: 1, gz: 2 },
-    ],
-  },
-  {
-    name: '第三关：阶梯',
-    blocks: [
-      { gx: 0, gy: 0, gz: 2 }, { gx: 1, gy: 0, gz: 2 }, { gx: 2, gy: 0, gz: 2 },
-      { gx: 1, gy: 1, gz: 2 }, { gx: 2, gy: 1, gz: 2 }, { gx: 2, gy: 2, gz: 2 },
+      { gx: 3, gy: 0, gz: 2 }, { gx: 2, gy: 0, gz: 3 },
+      { gx: 2, gy: 1, gz: 2 }, { gx: 3, gy: 1, gz: 2 },
+      { gx: 3, gy: 2, gz: 2 },
     ],
   },
 ];
+
+/* Generate a random valid level */
+function generateRandomLevel() {
+  const numBlocks = 3 + Math.floor(Math.random() * 6); // 3-8 blocks
+  const blocks = [];
+  const occupied = new Set();
+
+  // Helper to check if position is valid and get support
+  function hasSupport(gx, gy, gz) {
+    if (gy === 0) return true; // on ground
+    // Check if there's a block directly below
+    return occupied.has(`${gx},${gy-1},${gz}`);
+  }
+
+  // Helper to add a block
+  function tryAddBlock() {
+    const gx = Math.floor(Math.random() * 5);
+    const gz = Math.floor(Math.random() * 5);
+    const maxGy = 4;
+
+    // Find the highest supported position
+    for (let gy = 0; gy <= maxGy; gy++) {
+      if (hasSupport(gx, gy, gz) && !occupied.has(`${gx},${gy},${gz}`)) {
+        // Prefer higher positions sometimes
+        if (gy === maxGy || Math.random() > 0.3) {
+          occupied.add(`${gx},${gy},${gz}`);
+          blocks.push({ gx, gy, gz });
+          return true;
+        }
+      }
+    }
+    return false;
+  }
+
+  // Add blocks until we have enough
+  let attempts = 0;
+  while (blocks.length < numBlocks && attempts < 100) {
+    if (tryAddBlock()) {
+      attempts = 0;
+    } else {
+      attempts++;
+    }
+  }
+
+  // Generate level name
+  const levelNum = Math.floor(Math.random() * 1000);
+  return {
+    name: `随机关卡 #${levelNum}`,
+    blocks: blocks
+  };
+}
 
 let levelIndex = 0;
 const levelNameEl = document.getElementById('levelName');
@@ -790,6 +991,20 @@ function loadLevel(i) {
   btnSave.style.display = 'none';
   btnDemo.style.display = '';
   renderGrids();
+}
+
+function loadRandomLevel() {
+  const randomLevel = generateRandomLevel();
+  clearBlocks();
+  const v = computeViews(randomLevel.blocks);
+  target.front = v.front; target.left = v.left; target.top = v.top;
+  editable = false;
+  levelNameEl.textContent = randomLevel.name;
+  editHintEl.textContent = '';
+  btnSave.style.display = 'none';
+  btnDemo.style.display = 'none';
+  renderGrids();
+  showToast('已生成随机关卡');
 }
 
 function enterFreeDrawMode() {
@@ -936,48 +1151,52 @@ function viewOrbit() { flyTo(new THREE.Vector3(-300, 300 + LIFT, 460), WORLD_CEN
 
 function backToRoam() {
   setMode('roam');
-  showToast('已切回第一人称漫游，点击画面或按 E 锁定鼠标后用 WASD 移动');
+  showToast('漫游模式：点击画面锁定鼠标，用 WASD/方向键移动，Q/E 上下，R/ESC 返回');
 }
 
 /* =========================================================================
    Input: keyboard
    ========================================================================= */
-const move = { f: 0, b: 0, l: 0, r: 0, up: 0, down: 0, boost: false };
+const move = { f: 0, b: 0, l: 0, r: 0, up: 0, down: 0 };
 
 window.addEventListener('keydown', (e) => {
   switch (e.code) {
-    case 'KeyW': move.f = 1; break;
-    case 'KeyS': move.b = 1; break;
-    case 'KeyA': move.l = 1; break;
-    case 'KeyD': move.r = 1; break;
+    case 'KeyW': case 'ArrowUp': move.f = 1; break;
+    case 'KeyS': case 'ArrowDown': move.b = 1; break;
+    case 'KeyA': case 'ArrowLeft': move.l = 1; break;
+    case 'KeyD': case 'ArrowRight': move.r = 1; break;
+    case 'KeyQ': move.up = 1; break;
+    case 'KeyE': move.down = 1; break;
     case 'Space': move.up = 1; e.preventDefault(); break;
     case 'ControlLeft': case 'ControlRight': move.down = 1; break;
-    case 'ShiftLeft': case 'ShiftRight': move.boost = true; break;
-    case 'KeyE':
+    case 'KeyR':
+      setMode(mode === 'roam' ? 'orbit' : 'roam');
+      break;
+    case 'Escape':
       if (mode === 'roam') {
-        ensureAudio();
-        if (controls.isLocked) controls.unlock(); else controls.lock();
+        setMode('orbit');
       }
       break;
   }
 });
 window.addEventListener('keyup', (e) => {
   switch (e.code) {
-    case 'KeyW': move.f = 0; break;
-    case 'KeyS': move.b = 0; break;
-    case 'KeyA': move.l = 0; break;
-    case 'KeyD': move.r = 0; break;
+    case 'KeyW': case 'ArrowUp': move.f = 0; break;
+    case 'KeyS': case 'ArrowDown': move.b = 0; break;
+    case 'KeyA': case 'ArrowLeft': move.l = 0; break;
+    case 'KeyD': case 'ArrowRight': move.r = 0; break;
+    case 'KeyQ': move.up = 0; break;
+    case 'KeyE': move.down = 0; break;
     case 'Space': move.up = 0; break;
     case 'ControlLeft': case 'ControlRight': move.down = 0; break;
-    case 'ShiftLeft': case 'ShiftRight': move.boost = false; break;
   }
 });
 
-// --- Roam (pointer-locked) mouse: place / destroy from screen centre ---
+// --- Roam mode: clicking canvas locks pointer; no building with mouse ---
 renderer.domElement.addEventListener('mousedown', (e) => {
-  if (mode !== 'roam' || !controls.isLocked) return;
-  if (e.button === 0) doPlace(centerNDC);
-  else if (e.button === 2) doDestroy(centerNDC);
+  if (mode === 'roam' && !controls.isLocked) {
+    controls.lock();
+  }
 });
 window.addEventListener('contextmenu', (e) => e.preventDefault());
 
@@ -1033,9 +1252,8 @@ holdButton('vW', () => move.f = 1, () => move.f = 0);
 holdButton('vS', () => move.b = 1, () => move.b = 0);
 holdButton('vA', () => move.l = 1, () => move.l = 0);
 holdButton('vD', () => move.r = 1, () => move.r = 0);
-holdButton('vUp', () => move.up = 1, () => move.up = 0);
-holdButton('vDown', () => move.down = 1, () => move.down = 0);
-holdButton('vShift', () => move.boost = true, () => move.boost = false);
+holdButton('vQ', () => move.up = 1, () => move.up = 0);
+holdButton('vE', () => move.down = 1, () => move.down = 0);
 
 function tapButton(id, fn) {
   const el = document.getElementById(id);
@@ -1043,14 +1261,15 @@ function tapButton(id, fn) {
   el.addEventListener('click', (e) => { e.preventDefault(); fn(); });
 }
 // 🧱 / ⛏️ buttons act on screen centre (works in both modes, no pointer lock needed)
-tapButton('vPlace', () => { ensureAudio(); doPlace(centerNDC); });
-tapButton('vDestroy', () => { ensureAudio(); doDestroy(centerNDC); });
+tapButton('vPlace', () => { ensureAudio(); doPlace(centerNDC, true); });
+tapButton('vDestroy', () => { ensureAudio(); doDestroy(centerNDC, true); });
 
 /* =========================================================================
    Top / camera buttons
    ========================================================================= */
 document.getElementById('btnSubmit').addEventListener('click', submitValidation);
 document.getElementById('btnDemo').addEventListener('click', answerDemo);
+document.getElementById('btnRandom').addEventListener('click', loadRandomLevel);
 document.getElementById('btnClear').addEventListener('click', () => { clearBlocks(); showToast('已清空'); });
 document.getElementById('btnFree').addEventListener('click', enterFreeDrawMode);
 btnSave.addEventListener('click', () => {
@@ -1103,7 +1322,7 @@ function animate() {
 
   // First-person movement (only when locked and not animating camera)
   if (mode === 'roam' && controls.isLocked && !animatingCamera) {
-    const speed = (move.boost ? 900 : 360) * dt;
+    const speed = 360 * dt;
     if (move.f) controls.moveForward(speed);
     if (move.b) controls.moveForward(-speed);
     if (move.r) controls.moveRight(speed);
@@ -1113,8 +1332,8 @@ function animate() {
     if (camera.position.y < 40) camera.position.y = 40;
   }
 
-  // Hand only visible in first-person roam (hidden during orbit / preset views)
-  hand.visible = mode === 'roam' && controls.isLocked && !animatingCamera;
+  // Hand is hidden in both modes (confusing visual)
+  hand.visible = false;
 
   // Hand animation
   if (handSwing > 0) {
