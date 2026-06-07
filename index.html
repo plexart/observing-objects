@@ -250,7 +250,7 @@ scene.background = new THREE.Color(0x87CEEB);
 scene.fog = new THREE.Fog(0x87CEEB, 900, 2600);
 
 const camera = new THREE.PerspectiveCamera(70, window.innerWidth / window.innerHeight, 1, 6000);
-camera.position.set(380, 300 + LIFT, 460);
+camera.position.set(-300, 300 + LIFT, 460);
 camera.lookAt(0, 125 + LIFT, 0);
 
 /* =========================================================================
@@ -437,7 +437,7 @@ function makeTree(x, z) {
   g.position.set(x, 0, z);
   scene.add(g);
 }
-[[-420, -360], [430, -300], [-380, 380], [400, 420], [-520, 120], [520, -120]]
+[[-420, -360], [430, -300], [-300, 380], [400, 420], [-520, 120], [520, -120]]
   .forEach(([x, z]) => makeTree(x, z));
 
 /* =========================================================================
@@ -932,7 +932,7 @@ function flyTo(pos, look) {
 function viewFront() { flyTo(new THREE.Vector3(0, WORLD_CENTER.y, 660), WORLD_CENTER.clone()); }
 function viewLeft()  { flyTo(new THREE.Vector3(-660, WORLD_CENTER.y, 0), WORLD_CENTER.clone()); }
 function viewTop()   { flyTo(new THREE.Vector3(0, 840 + LIFT, 0.001), WORLD_CENTER.clone()); }
-function viewOrbit() { flyTo(new THREE.Vector3(380, 300 + LIFT, 460), WORLD_CENTER.clone()); showToast('环视视角：拖动旋转，滚轮缩放'); }
+function viewOrbit() { flyTo(new THREE.Vector3(-300, 300 + LIFT, 460), WORLD_CENTER.clone()); showToast('环视视角：拖动旋转，滚轮缩放'); }
 
 function backToRoam() {
   setMode('roam');
