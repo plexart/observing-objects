@@ -319,8 +319,13 @@ function makeWoodTexture() {
 
 const grassTex = makeGrassTexture();
 const woodTex = makeWoodTexture();
-const blockGeo = new THREE.BoxGeometry(BLOCK, BLOCK, BLOCK);
+// Blocks are slightly smaller than the 50-unit cell so adjacent cubes show a small
+// gap, and each gets a dark outline — together this makes individual blocks easy to
+// tell apart even when packed tightly.
+const blockGeo = new THREE.BoxGeometry(BLOCK - 3, BLOCK - 3, BLOCK - 3);
 const blockMat = new THREE.MeshLambertMaterial({ map: woodTex });
+const blockEdgesGeo = new THREE.EdgesGeometry(blockGeo);
+const blockEdgesMat = new THREE.LineBasicMaterial({ color: 0x3e2723 });
 
 /* =========================================================================
    Ground, base, grid, trees, placement plane
@@ -535,6 +540,7 @@ function addBlock(gx, gy, gz) {
   m.castShadow = true;
   m.receiveShadow = true;
   m.userData.grid = { gx, gy, gz };
+  m.add(new THREE.LineSegments(blockEdgesGeo, blockEdgesMat)); // dark outline
   scene.add(m);
   blocks.set(k, m);
   blockMeshes.push(m);
