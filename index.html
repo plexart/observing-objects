@@ -1,0 +1,1002 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+<title>观察物体（二）· 立体图形与三视图</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  html, body {
+    width: 100%; height: 100%; overflow: hidden;
+    font-family: "Microsoft YaHei", "PingFang SC", "Helvetica Neue", Arial, sans-serif;
+    background: #87CEEB; touch-action: none; -webkit-user-select: none; user-select: none;
+  }
+  #app { position: fixed; inset: 0; }
+  canvas { display: block; }
+
+  /* Crosshair */
+  #crosshair {
+    position: fixed; left: 50%; top: 50%; width: 22px; height: 22px;
+    transform: translate(-50%, -50%); pointer-events: none; z-index: 30; opacity: 0.85;
+  }
+  #crosshair::before, #crosshair::after {
+    content: ""; position: absolute; background: rgba(255,255,255,0.9);
+    box-shadow: 0 0 2px rgba(0,0,0,0.6);
+  }
+  #crosshair::before { left: 50%; top: 0; width: 2px; height: 100%; transform: translateX(-50%); }
+  #crosshair::after { top: 50%; left: 0; height: 2px; width: 100%; transform: translateY(-50%); }
+
+  /* Left panel: three views */
+  #viewsPanel {
+    position: fixed; left: 12px; top: 12px; z-index: 25;
+    background: rgba(255,255,255,0.88); border-radius: 12px; padding: 12px 14px;
+    box-shadow: 0 6px 20px rgba(0,0,0,0.25); backdrop-filter: blur(4px);
+    max-height: calc(100vh - 24px); overflow: auto;
+  }
+  #viewsPanel h2 { font-size: 15px; color: #2b3a55; margin-bottom: 8px; text-align: center; }
+  .view-block { margin-bottom: 12px; }
+  .view-block .view-title { font-size: 13px; color: #34495e; margin-bottom: 4px; font-weight: bold; }
+  .grid5 {
+    display: grid; grid-template-columns: repeat(5, 1fr); gap: 3px;
+    width: 130px; padding: 4px; background: #cfd8dc; border-radius: 6px;
+  }
+  .grid5.editable .cell { cursor: pointer; }
+  .cell {
+    width: 100%; aspect-ratio: 1 / 1; background: #eceff1; border-radius: 3px;
+    border: 1px solid #b0bec5; transition: background 0.12s, transform 0.08s;
+  }
+  .cell.active { background: #ff7043; border-color: #e64a19; }
+  .grid5.editable .cell:active { transform: scale(0.9); }
+  #editHint { font-size: 11px; color: #d84315; margin-top: 2px; min-height: 14px; }
+
+  /* Top control bar */
+  #topBar {
+    position: fixed; top: 12px; left: 50%; transform: translateX(-50%); z-index: 25;
+    display: flex; gap: 8px; flex-wrap: wrap; justify-content: center;
+    background: rgba(255,255,255,0.85); padding: 8px 12px; border-radius: 12px;
+    box-shadow: 0 4px 14px rgba(0,0,0,0.2); max-width: calc(100vw - 320px);
+  }
+  #levelName { font-size: 15px; font-weight: bold; color: #1a237e; align-self: center; padding: 0 6px; }
+  .btn {
+    border: none; border-radius: 10px; padding: 9px 13px; font-size: 14px; cursor: pointer;
+    background: #5c6bc0; color: #fff; font-weight: 600; box-shadow: 0 2px 6px rgba(0,0,0,0.2);
+    transition: transform 0.06s, filter 0.12s; white-space: nowrap; touch-action: manipulation;
+  }
+  .btn:hover { filter: brightness(1.08); }
+  .btn:active { transform: translateY(1px) scale(0.97); }
+  .btn.green { background: #43a047; }
+  .btn.orange { background: #fb8c00; }
+  .btn.red { background: #e53935; }
+  .btn.teal { background: #00897b; }
+  .btn.grey { background: #607d8b; }
+
+  /* Camera preset buttons */
+  #cameraBar {
+    position: fixed; right: 12px; top: 12px; z-index: 25; display: flex; flex-direction: column; gap: 8px;
+  }
+
+  /* Bottom virtual controls */
+  #touchControls { position: fixed; bottom: 14px; left: 0; right: 0; z-index: 26; pointer-events: none; }
+  #touchControls .pad { position: absolute; pointer-events: auto; }
+  #movePad { left: 16px; bottom: 0; display: grid; grid-template-columns: repeat(3, 56px); grid-template-rows: repeat(3, 56px); gap: 6px; }
+  #actionPad { right: 16px; bottom: 0; display: grid; grid-template-columns: repeat(2, 64px); grid-template-rows: repeat(2, 64px); gap: 8px; }
+  .vbtn {
+    border: none; border-radius: 12px; background: rgba(38,50,56,0.78); color: #fff; font-size: 18px;
+    font-weight: 700; display: flex; align-items: center; justify-content: center; cursor: pointer;
+    box-shadow: 0 3px 8px rgba(0,0,0,0.35); touch-action: none; -webkit-user-select: none; user-select: none;
+  }
+  .vbtn:active, .vbtn.held { background: #ff7043; transform: scale(0.94); }
+  .vbtn.wide { font-size: 24px; }
+  #vW { grid-column: 2; grid-row: 1; }
+  #vA { grid-column: 1; grid-row: 2; }
+  #vS { grid-column: 2; grid-row: 2; }
+  #vD { grid-column: 3; grid-row: 2; }
+  #vUp { grid-column: 1; grid-row: 1; }
+  #vDown { grid-column: 3; grid-row: 1; }
+  #vShift { grid-column: 1 / span 1; grid-row: 3; }
+  #vPlace { grid-column: 1; grid-row: 1 / span 2; height: 100%; }
+  #vDestroy { grid-column: 2; grid-row: 1 / span 2; height: 100%; }
+
+  /* Lock / play overlay */
+  #lockOverlay {
+    position: fixed; inset: 0; z-index: 40; display: flex; align-items: center; justify-content: center;
+    background: rgba(20,30,48,0.55); cursor: pointer; text-align: center; color: #fff;
+  }
+  #lockOverlay.hidden { display: none; }
+  #lockOverlay .card {
+    background: rgba(0,0,0,0.55); padding: 28px 36px; border-radius: 16px; max-width: 520px;
+  }
+  #lockOverlay h1 { font-size: 24px; margin-bottom: 12px; }
+  #lockOverlay p { font-size: 15px; line-height: 1.7; opacity: 0.95; }
+  #lockOverlay .play { margin-top: 18px; font-size: 18px; }
+
+  /* Toast message */
+  #toast {
+    position: fixed; left: 50%; bottom: 96px; transform: translateX(-50%) translateY(20px);
+    z-index: 45; background: rgba(0,0,0,0.82); color: #fff; padding: 12px 20px; border-radius: 12px;
+    font-size: 16px; opacity: 0; transition: opacity 0.25s, transform 0.25s; pointer-events: none; max-width: 80vw; text-align: center;
+  }
+  #toast.show { opacity: 1; transform: translateX(-50%) translateY(0); }
+
+  /* HUD hint */
+  #hud {
+    position: fixed; left: 12px; bottom: 12px; z-index: 24; color: #fff; font-size: 12px;
+    background: rgba(0,0,0,0.4); padding: 6px 10px; border-radius: 8px; line-height: 1.5;
+  }
+
+  @media (max-width: 820px) {
+    #topBar { max-width: calc(100vw - 24px); left: 12px; transform: none; }
+    #viewsPanel { transform: scale(0.92); transform-origin: top left; }
+    #cameraBar { top: auto; bottom: 92px; right: 12px; }
+  }
+</style>
+<!-- Tween.js (UMD global: TWEEN) -->
+<script src="https://cdnjs.cloudflare.com/ajax/libs/tween.js/21.0.0/tween.umd.js"></script>
+<!-- Three.js r184 module resolution -->
+<script type="importmap">
+{
+  "imports": {
+    "three": "https://unpkg.com/three@0.184.0/build/three.module.js"
+  }
+}
+</script>
+</head>
+<body>
+<div id="app"></div>
+
+<div id="crosshair"></div>
+
+<!-- Three-view matching panel -->
+<div id="viewsPanel">
+  <h2>三视图对照</h2>
+  <div class="view-block">
+    <div class="view-title">正视图（X→ / Y↑）</div>
+    <div class="grid5" id="gridFront"></div>
+  </div>
+  <div class="view-block">
+    <div class="view-title">左视图（Z→ / Y↑）</div>
+    <div class="grid5" id="gridLeft"></div>
+  </div>
+  <div class="view-block">
+    <div class="view-title">俯视图（X→ / Z↓）</div>
+    <div class="grid5" id="gridTop"></div>
+  </div>
+  <div id="editHint"></div>
+</div>
+
+<!-- Top controls -->
+<div id="topBar">
+  <span id="levelName">第一关：经典T型</span>
+  <button class="btn green" id="btnSubmit">提交验证！</button>
+  <button class="btn orange" id="btnDemo">答案演示</button>
+  <button class="btn red" id="btnClear">清空</button>
+  <button class="btn teal" id="btnFree">老师：自由画图出题</button>
+  <button class="btn grey" id="btnSave" style="display:none;">✏️ 保存当前画的题</button>
+</div>
+
+<!-- Camera presets -->
+<div id="cameraBar">
+  <button class="btn" id="btnViewFront">🎥 看正视图</button>
+  <button class="btn" id="btnViewLeft">🎥 看左视图</button>
+  <button class="btn" id="btnViewTop">🚁 看俯视图</button>
+  <button class="btn grey" id="btnRoam">🏃 切回漫游</button>
+</div>
+
+<!-- Touch / virtual controls -->
+<div id="touchControls">
+  <div class="pad" id="movePad">
+    <button class="vbtn" id="vUp" title="上升 (Space)">⬆️</button>
+    <button class="vbtn" id="vW">W</button>
+    <button class="vbtn" id="vDown" title="下降 (Ctrl)">⬇️</button>
+    <button class="vbtn" id="vA">A</button>
+    <button class="vbtn" id="vS">S</button>
+    <button class="vbtn" id="vD">D</button>
+    <button class="vbtn wide" id="vShift" title="加速 (Shift)">🚀</button>
+  </div>
+  <div class="pad" id="actionPad">
+    <button class="vbtn wide" id="vPlace" title="放置">🧱</button>
+    <button class="vbtn wide" id="vDestroy" title="拆除">⛏️</button>
+  </div>
+</div>
+
+<!-- Lock overlay -->
+<div id="lockOverlay">
+  <div class="card">
+    <h1>观察物体（二）· 搭立体图形</h1>
+    <p>
+      用 <b>WASD</b> 移动，<b>鼠标</b> 转动视角，<b>空格</b> 上升 / <b>Ctrl</b> 下降，<b>Shift</b> 加速。<br />
+      <b>左键</b> 放置积木 🧱，<b>右键</b> 拆除积木 ⛏️。<br />
+      搭出和左侧三视图一致的立体图形，然后点击「提交验证！」。<br />
+      手机端可使用屏幕上的虚拟按钮。
+    </p>
+    <p class="play">点击此处 / 按 <b>E</b> 开始</p>
+  </div>
+</div>
+
+<div id="toast"></div>
+<div id="hud">按 <b>E</b> 锁定/解锁鼠标 · 左键放置 · 右键拆除</div>
+
+<script type="module">
+import * as THREE from 'three';
+import { PointerLockControls } from 'https://unpkg.com/three@0.184.0/examples/jsm/controls/PointerLockControls.js';
+
+/* =========================================================================
+   Constants & grid definition
+   ========================================================================= */
+const BLOCK = 50;                         // block size (units)
+const X = [-100, -50, 0, 50, 100];        // gx index 0..4
+const Y = [50, 100, 150, 200, 250];       // gy index 0..4
+const Z = [-100, -50, 0, 50, 100];        // gz index 0..4
+const GROUND_TOP = 25;                    // top surface of the base / placement plane
+
+/* =========================================================================
+   Renderer / Scene / Camera
+   ========================================================================= */
+const app = document.getElementById('app');
+const renderer = new THREE.WebGLRenderer({ antialias: true });
+renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+renderer.setSize(window.innerWidth, window.innerHeight);
+renderer.shadowMap.enabled = true;
+renderer.shadowMap.type = THREE.PCFShadowMap;
+app.appendChild(renderer.domElement);
+
+const scene = new THREE.Scene();
+scene.background = new THREE.Color(0x87CEEB);
+scene.fog = new THREE.Fog(0x87CEEB, 900, 2600);
+
+const camera = new THREE.PerspectiveCamera(70, window.innerWidth / window.innerHeight, 1, 6000);
+camera.position.set(360, 180, 460);
+camera.lookAt(0, 120, 0);
+
+/* =========================================================================
+   Lighting
+   ========================================================================= */
+scene.add(new THREE.AmbientLight(0xffffff, 0.65));
+const sun = new THREE.DirectionalLight(0xffffff, 1.1);
+sun.position.set(400, 700, 350);
+sun.castShadow = true;
+sun.shadow.mapSize.set(2048, 2048);
+sun.shadow.camera.near = 100;
+sun.shadow.camera.far = 2200;
+sun.shadow.camera.left = -700;
+sun.shadow.camera.right = 700;
+sun.shadow.camera.top = 700;
+sun.shadow.camera.bottom = -700;
+scene.add(sun);
+
+/* =========================================================================
+   Procedural textures (canvas)
+   ========================================================================= */
+function makeGrassTexture() {
+  const c = document.createElement('canvas');
+  c.width = c.height = 128;
+  const ctx = c.getContext('2d');
+  ctx.fillStyle = '#5aa64b';
+  ctx.fillRect(0, 0, 128, 128);
+  for (let i = 0; i < 5000; i++) {
+    const x = Math.random() * 128, y = Math.random() * 128;
+    const g = 120 + Math.floor(Math.random() * 90);
+    ctx.fillStyle = `rgba(${Math.floor(g * 0.45)},${g},${Math.floor(g * 0.4)},0.5)`;
+    ctx.fillRect(x, y, 2, 2);
+  }
+  const t = new THREE.CanvasTexture(c);
+  t.wrapS = t.wrapT = THREE.RepeatWrapping;
+  t.repeat.set(20, 20);
+  t.colorSpace = THREE.SRGBColorSpace;
+  return t;
+}
+
+function makeWoodTexture() {
+  const c = document.createElement('canvas');
+  c.width = c.height = 128;
+  const ctx = c.getContext('2d');
+  ctx.fillStyle = '#b5803f';
+  ctx.fillRect(0, 0, 128, 128);
+  // grain lines
+  for (let i = 0; i < 26; i++) {
+    const x = (i / 26) * 128 + (Math.random() * 4 - 2);
+    ctx.strokeStyle = `rgba(${90 + Math.random() * 40},${55 + Math.random() * 30},${20 + Math.random() * 20},0.55)`;
+    ctx.lineWidth = 1 + Math.random() * 2;
+    ctx.beginPath();
+    ctx.moveTo(x, 0);
+    ctx.bezierCurveTo(x + 6, 42, x - 6, 86, x + 3, 128);
+    ctx.stroke();
+  }
+  // noise specks
+  for (let i = 0; i < 1800; i++) {
+    ctx.fillStyle = `rgba(${60 + Math.random() * 40},${40 + Math.random() * 25},${10 + Math.random() * 15},0.18)`;
+    ctx.fillRect(Math.random() * 128, Math.random() * 128, 1, 1);
+  }
+  const t = new THREE.CanvasTexture(c);
+  t.colorSpace = THREE.SRGBColorSpace;
+  return t;
+}
+
+const grassTex = makeGrassTexture();
+const woodTex = makeWoodTexture();
+const blockGeo = new THREE.BoxGeometry(BLOCK, BLOCK, BLOCK);
+const blockMat = new THREE.MeshLambertMaterial({ map: woodTex });
+
+/* =========================================================================
+   Ground, base, grid, trees, placement plane
+   ========================================================================= */
+// Visible grass ground
+const ground = new THREE.Mesh(
+  new THREE.PlaneGeometry(4000, 4000),
+  new THREE.MeshLambertMaterial({ map: grassTex })
+);
+ground.rotation.x = -Math.PI / 2;
+ground.position.y = GROUND_TOP;
+ground.receiveShadow = true;
+scene.add(ground);
+
+// Thick base block under the build area
+const base = new THREE.Mesh(
+  new THREE.BoxGeometry(320, 80, 320),
+  new THREE.MeshLambertMaterial({ color: 0x8d6e63 })
+);
+base.position.set(0, GROUND_TOP - 40, 0);
+base.receiveShadow = true;
+base.castShadow = true;
+scene.add(base);
+
+// Grid helper at y = 25.1 (opacity 0.5)
+const grid = new THREE.GridHelper(250, 5, 0x33691e, 0x558b2f);
+grid.position.y = GROUND_TOP + 0.1;
+grid.material.opacity = 0.5;
+grid.material.transparent = true;
+scene.add(grid);
+
+// Invisible placement plane (5x5 build footprint) for raycasting the ground
+const placementGround = new THREE.Mesh(
+  new THREE.PlaneGeometry(250, 250),
+  new THREE.MeshBasicMaterial({ visible: false })
+);
+placementGround.rotation.x = -Math.PI / 2;
+placementGround.position.y = GROUND_TOP;
+scene.add(placementGround);
+
+// Decorative trees
+function makeTree(x, z) {
+  const g = new THREE.Group();
+  const trunk = new THREE.Mesh(
+    new THREE.BoxGeometry(20, 80, 20),
+    new THREE.MeshLambertMaterial({ color: 0x795548 })
+  );
+  trunk.position.y = GROUND_TOP + 40;
+  trunk.castShadow = true;
+  const leaves = new THREE.Mesh(
+    new THREE.BoxGeometry(90, 90, 90),
+    new THREE.MeshLambertMaterial({ color: 0x2e7d32 })
+  );
+  leaves.position.y = GROUND_TOP + 120;
+  leaves.castShadow = true;
+  g.add(trunk, leaves);
+  g.position.set(x, 0, z);
+  scene.add(g);
+}
+[[-420, -360], [430, -300], [-380, 380], [400, 420], [-520, 120], [520, -120]]
+  .forEach(([x, z]) => makeTree(x, z));
+
+/* =========================================================================
+   Controls (PointerLockControls)
+   ========================================================================= */
+const controls = new PointerLockControls(camera, renderer.domElement);
+scene.add(camera);
+
+const lockOverlay = document.getElementById('lockOverlay');
+controls.addEventListener('lock', () => lockOverlay.classList.add('hidden'));
+controls.addEventListener('unlock', () => { if (!animatingCamera) lockOverlay.classList.remove('hidden'); });
+
+lockOverlay.addEventListener('click', () => { ensureAudio(); controls.lock(); });
+
+/* =========================================================================
+   First-person hand (attached to camera)
+   ========================================================================= */
+const hand = new THREE.Group();
+const palm = new THREE.Mesh(
+  new THREE.BoxGeometry(14, 14, 26),
+  new THREE.MeshLambertMaterial({ map: woodTex })
+);
+hand.add(palm);
+hand.position.set(13, -11, -26);
+hand.rotation.set(0, -0.2, 0);
+camera.add(hand);
+let handSwing = 0; // animation timer
+
+function swingHand() { handSwing = 1; }
+
+/* =========================================================================
+   Placement preview (white wireframe cube)
+   ========================================================================= */
+const preview = new THREE.LineSegments(
+  new THREE.EdgesGeometry(blockGeo),
+  new THREE.LineBasicMaterial({ color: 0xffffff })
+);
+preview.visible = false;
+scene.add(preview);
+
+/* =========================================================================
+   Block bookkeeping
+   ========================================================================= */
+const blocks = new Map();          // key "gx,gy,gz" -> mesh
+const blockMeshes = [];            // for raycasting destroy
+const raycaster = new THREE.Raycaster();
+const centerNDC = new THREE.Vector2(0, 0);
+
+const keyOf = (gx, gy, gz) => `${gx},${gy},${gz}`;
+const inRange = (i) => i >= 0 && i <= 4;
+const worldOf = (gx, gy, gz) => new THREE.Vector3(X[gx], Y[gy], Z[gz]);
+
+function addBlock(gx, gy, gz) {
+  if (!inRange(gx) || !inRange(gy) || !inRange(gz)) return false;
+  const k = keyOf(gx, gy, gz);
+  if (blocks.has(k)) return false;
+  const m = new THREE.Mesh(blockGeo, blockMat);
+  m.position.copy(worldOf(gx, gy, gz));
+  m.castShadow = true;
+  m.receiveShadow = true;
+  m.userData.grid = { gx, gy, gz };
+  scene.add(m);
+  blocks.set(k, m);
+  blockMeshes.push(m);
+  return true;
+}
+
+function removeBlockMesh(mesh) {
+  const { gx, gy, gz } = mesh.userData.grid;
+  const k = keyOf(gx, gy, gz);
+  blocks.delete(k);
+  const idx = blockMeshes.indexOf(mesh);
+  if (idx >= 0) blockMeshes.splice(idx, 1);
+  scene.remove(mesh);
+}
+
+function clearBlocks() {
+  for (const m of [...blockMeshes]) removeBlockMesh(m);
+}
+
+/* =========================================================================
+   Compute placement candidate from center ray
+   ========================================================================= */
+function snapIndex(value, arr) {
+  let best = 0, bd = Infinity;
+  for (let i = 0; i < arr.length; i++) {
+    const d = Math.abs(arr[i] - value);
+    if (d < bd) { bd = d; best = i; }
+  }
+  return best;
+}
+
+function computeCandidate() {
+  raycaster.setFromCamera(centerNDC, camera);
+  const targets = [placementGround, ...blockMeshes];
+  const hits = raycaster.intersectObjects(targets, false);
+  if (!hits.length) return null;
+  const hit = hits[0];
+  if (hit.object === placementGround) {
+    const p = hit.point;
+    if (Math.abs(p.x) > 130 || Math.abs(p.z) > 130) return null;
+    return { gx: snapIndex(p.x, X), gy: 0, gz: snapIndex(p.z, Z) };
+  }
+  // Hit an existing block -> neighbour along the hit face normal
+  const n = hit.face.normal.clone().transformDirection(hit.object.matrixWorld);
+  const g = hit.object.userData.grid;
+  const cand = {
+    gx: g.gx + Math.round(n.x),
+    gy: g.gy + Math.round(n.y),
+    gz: g.gz + Math.round(n.z),
+  };
+  if (!inRange(cand.gx) || !inRange(cand.gy) || !inRange(cand.gz)) return null;
+  return cand;
+}
+
+let currentPlacement = null;
+function updatePreview() {
+  if (!controls.isLocked || animatingCamera) { preview.visible = false; currentPlacement = null; return; }
+  const cand = computeCandidate();
+  if (cand && !blocks.has(keyOf(cand.gx, cand.gy, cand.gz))) {
+    preview.position.copy(worldOf(cand.gx, cand.gy, cand.gz));
+    preview.visible = true;
+    currentPlacement = cand;
+  } else {
+    preview.visible = false;
+    currentPlacement = null;
+  }
+}
+
+/* =========================================================================
+   Place / destroy actions
+   ========================================================================= */
+function doPlace() {
+  if (!controls.isLocked || animatingCamera) return;
+  updatePreview();
+  if (currentPlacement) {
+    if (addBlock(currentPlacement.gx, currentPlacement.gy, currentPlacement.gz)) {
+      swingHand();
+      sfxPlace();
+    }
+  }
+}
+
+function doDestroy() {
+  if (!controls.isLocked || animatingCamera) return;
+  raycaster.setFromCamera(centerNDC, camera);
+  const hits = raycaster.intersectObjects(blockMeshes, false);
+  if (hits.length) {
+    removeBlockMesh(hits[0].object);
+    swingHand();
+    sfxDestroy();
+  }
+}
+
+/* =========================================================================
+   Web Audio synth SFX
+   ========================================================================= */
+let audioCtx = null;
+function ensureAudio() {
+  if (!audioCtx) {
+    try { audioCtx = new (window.AudioContext || window.webkitAudioContext)(); }
+    catch (e) { audioCtx = null; }
+  }
+  if (audioCtx && audioCtx.state === 'suspended') audioCtx.resume();
+}
+function tone(freq, dur, type, startOffset = 0, gain = 0.18) {
+  if (!audioCtx) return;
+  const t0 = audioCtx.currentTime + startOffset;
+  const osc = audioCtx.createOscillator();
+  const g = audioCtx.createGain();
+  osc.type = type;
+  osc.frequency.setValueAtTime(freq, t0);
+  g.gain.setValueAtTime(0.0001, t0);
+  g.gain.exponentialRampToValueAtTime(gain, t0 + 0.01);
+  g.gain.exponentialRampToValueAtTime(0.0001, t0 + dur);
+  osc.connect(g).connect(audioCtx.destination);
+  osc.start(t0);
+  osc.stop(t0 + dur + 0.02);
+}
+function sfxPlace() { ensureAudio(); tone(440, 0.12, 'square'); tone(660, 0.12, 'square', 0.05); }
+function sfxDestroy() { ensureAudio(); tone(330, 0.16, 'triangle'); tone(180, 0.18, 'triangle', 0.05); }
+function sfxVictory() {
+  ensureAudio();
+  const scale = [523.25, 587.33, 659.25, 698.46, 783.99, 880.0, 987.77, 1046.5]; // C major
+  scale.forEach((f, i) => tone(f, 0.22, 'triangle', i * 0.11, 0.16));
+}
+
+/* =========================================================================
+   Three-view UI grids
+   ========================================================================= */
+const gridEls = {
+  front: document.getElementById('gridFront'),
+  left: document.getElementById('gridLeft'),
+  top: document.getElementById('gridTop'),
+};
+const cellEls = { front: [], left: [], top: [] };
+// target patterns (25-char strings of '0'/'1')
+const target = { front: '0'.repeat(25), left: '0'.repeat(25), top: '0'.repeat(25) };
+let editable = false; // free-draw (teacher) mode
+
+function buildGrids() {
+  for (const view of ['front', 'left', 'top']) {
+    const el = gridEls[view];
+    el.innerHTML = '';
+    cellEls[view] = [];
+    for (let i = 0; i < 25; i++) {
+      const cell = document.createElement('div');
+      cell.className = 'cell';
+      cell.dataset.index = i;
+      cell.addEventListener('click', () => {
+        if (!editable) return;
+        const arr = target[view].split('');
+        arr[i] = arr[i] === '1' ? '0' : '1';
+        target[view] = arr.join('');
+        renderGrids();
+      });
+      el.appendChild(cell);
+      cellEls[view].push(cell);
+    }
+  }
+}
+
+function renderGrids() {
+  for (const view of ['front', 'left', 'top']) {
+    gridEls[view].classList.toggle('editable', editable);
+    const s = target[view];
+    for (let i = 0; i < 25; i++) {
+      cellEls[view][i].classList.toggle('active', s[i] === '1');
+    }
+  }
+}
+
+/* =========================================================================
+   Projection logic
+   ========================================================================= */
+function computeViews(list) {
+  const front = Array(25).fill('0');
+  const left = Array(25).fill('0');
+  const top = Array(25).fill('0');
+  for (const b of list) {
+    const { gx, gy, gz } = b;
+    front[(4 - gy) * 5 + gx] = '1';
+    left[(4 - gy) * 5 + gz] = '1';
+    top[gz * 5 + gx] = '1';
+  }
+  return { front: front.join(''), left: left.join(''), top: top.join('') };
+}
+
+function currentPlayerBlocks() {
+  return [...blocks.values()].map((m) => m.userData.grid);
+}
+
+/* =========================================================================
+   Levels
+   ========================================================================= */
+const LEVELS = [
+  {
+    name: '第一关：经典T型',
+    blocks: [
+      { gx: 2, gy: 0, gz: 2 }, { gx: 2, gy: 1, gz: 2 }, { gx: 2, gy: 2, gz: 2 },
+      { gx: 1, gy: 2, gz: 2 }, { gx: 3, gy: 2, gz: 2 },
+    ],
+  },
+  {
+    name: '第二关：遮挡',
+    blocks: [
+      { gx: 1, gy: 0, gz: 1 }, { gx: 3, gy: 0, gz: 1 },
+      { gx: 1, gy: 0, gz: 3 }, { gx: 3, gy: 0, gz: 3 },
+      { gx: 2, gy: 1, gz: 2 },
+    ],
+  },
+  {
+    name: '第三关：阶梯',
+    blocks: [
+      { gx: 0, gy: 0, gz: 2 }, { gx: 1, gy: 0, gz: 2 }, { gx: 2, gy: 0, gz: 2 },
+      { gx: 1, gy: 1, gz: 2 }, { gx: 2, gy: 1, gz: 2 }, { gx: 2, gy: 2, gz: 2 },
+    ],
+  },
+];
+
+let levelIndex = 0;
+const levelNameEl = document.getElementById('levelName');
+const editHintEl = document.getElementById('editHint');
+const btnSave = document.getElementById('btnSave');
+const btnDemo = document.getElementById('btnDemo');
+
+function loadLevel(i) {
+  levelIndex = i;
+  const lv = LEVELS[i];
+  clearBlocks();
+  const v = computeViews(lv.blocks);
+  target.front = v.front; target.left = v.left; target.top = v.top;
+  editable = false;
+  levelNameEl.textContent = lv.name;
+  editHintEl.textContent = '';
+  btnSave.style.display = 'none';
+  btnDemo.style.display = '';
+  renderGrids();
+}
+
+function enterFreeDrawMode() {
+  clearBlocks();
+  target.front = '0'.repeat(25); target.left = '0'.repeat(25); target.top = '0'.repeat(25);
+  editable = true;
+  levelNameEl.textContent = '老师：自由画图出题';
+  editHintEl.textContent = '点击三视图格子绘制题目，然后搭出立体图形';
+  btnSave.style.display = '';
+  btnDemo.style.display = 'none';
+  renderGrids();
+  showToast('已进入自由画图出题模式');
+}
+
+/* =========================================================================
+   Validation / victory
+   ========================================================================= */
+function submitValidation() {
+  const player = currentPlayerBlocks();
+  if (player.length === 0) {
+    showToast('还没有搭任何积木哦，先放置积木吧！');
+    return;
+  }
+  const v = computeViews(player);
+  const ok = v.front === target.front && v.left === target.left && v.top === target.top;
+  if (ok) {
+    victory();
+  } else {
+    showToast('还不对哦～可用「看正视图/左视图/俯视图」按钮对照，或点「答案演示」。');
+  }
+}
+
+function victory() {
+  sfxVictory();
+  burstParticles();
+  if (editable) {
+    showToast('🎉 太棒了！和你画的题目完全一致！');
+    return;
+  }
+  if (levelIndex < LEVELS.length - 1) {
+    showToast('🎉 闯关成功！即将进入下一关…');
+    const next = levelIndex + 1;
+    setTimeout(() => loadLevel(next), 2200);
+  } else {
+    showToast('🎉 全部关卡完成！进入自由画图出题模式');
+    setTimeout(enterFreeDrawMode, 2200);
+  }
+}
+
+/* =========================================================================
+   Answer demo (build solution block by block)
+   ========================================================================= */
+let demoRunning = false;
+function answerDemo() {
+  if (demoRunning || editable) return;
+  demoRunning = true;
+  clearBlocks();
+  const seq = LEVELS[levelIndex].blocks;
+  let i = 0;
+  const step = () => {
+    if (i >= seq.length) { demoRunning = false; showToast('演示完成，可点「提交验证！」'); return; }
+    const b = seq[i++];
+    if (addBlock(b.gx, b.gy, b.gz)) sfxPlace();
+    setTimeout(step, 380);
+  };
+  showToast('正在演示答案…');
+  step();
+}
+
+/* =========================================================================
+   Particle burst on victory
+   ========================================================================= */
+const particles = [];
+const partGeo = new THREE.PlaneGeometry(10, 10);
+function burstParticles() {
+  const colors = [0xff5252, 0xffd740, 0x69f0ae, 0x40c4ff, 0xe040fb, 0xffffff];
+  for (let i = 0; i < 120; i++) {
+    const mat = new THREE.MeshBasicMaterial({
+      color: colors[i % colors.length], side: THREE.DoubleSide, transparent: true,
+    });
+    const m = new THREE.Mesh(partGeo, mat);
+    m.position.set(0, 160, 0);
+    const dir = new THREE.Vector3(
+      (Math.random() - 0.5) * 2, Math.random() * 1.2 + 0.3, (Math.random() - 0.5) * 2
+    ).normalize();
+    m.userData.vel = dir.multiplyScalar(220 + Math.random() * 220);
+    m.userData.life = 1.6 + Math.random() * 0.8;
+    m.userData.age = 0;
+    scene.add(m);
+    particles.push(m);
+  }
+}
+function updateParticles(dt) {
+  for (let i = particles.length - 1; i >= 0; i--) {
+    const p = particles[i];
+    p.userData.age += dt;
+    p.userData.vel.y -= 380 * dt; // gravity
+    p.position.addScaledVector(p.userData.vel, dt);
+    p.rotation.x += dt * 6; p.rotation.y += dt * 5;
+    const k = 1 - p.userData.age / p.userData.life;
+    p.material.opacity = Math.max(0, k);
+    if (p.userData.age >= p.userData.life) {
+      scene.remove(p); p.material.dispose(); particles.splice(i, 1);
+    }
+  }
+}
+
+/* =========================================================================
+   Camera presets (Tween)
+   ========================================================================= */
+let animatingCamera = false;
+const lookTarget = new THREE.Vector3(0, 150, 0);
+
+function flyTo(pos, look, up) {
+  animatingCamera = true;
+  preview.visible = false;
+  if (controls.isLocked) controls.unlock();
+  lockOverlay.classList.add('hidden');
+
+  const startPos = camera.position.clone();
+  // current look point ~ a point in front of the camera
+  const startLook = camera.getWorldDirection(new THREE.Vector3())
+    .multiplyScalar(300).add(camera.position);
+  const tmpPos = startPos.clone();
+  const tmpLook = startLook.clone();
+  camera.up.set(up.x, up.y, up.z);
+
+  const obj = { t: 0 };
+  new TWEEN.Tween(obj)
+    .to({ t: 1 }, 1100)
+    .easing(TWEEN.Easing.Cubic.InOut)
+    .onUpdate(() => {
+      tmpPos.lerpVectors(startPos, pos, obj.t);
+      tmpLook.lerpVectors(startLook, look, obj.t);
+      camera.position.copy(tmpPos);
+      camera.up.set(up.x, up.y, up.z);
+      camera.lookAt(tmpLook);
+    })
+    .onComplete(() => { animatingCamera = false; })
+    .start();
+}
+
+function viewFront() { flyTo(new THREE.Vector3(0, 150, 640), new THREE.Vector3(0, 150, 0), new THREE.Vector3(0, 1, 0)); }
+function viewLeft()  { flyTo(new THREE.Vector3(640, 150, 0), new THREE.Vector3(0, 150, 0), new THREE.Vector3(0, 1, 0)); }
+function viewTop()   { flyTo(new THREE.Vector3(0, 760, 0.01), new THREE.Vector3(0, 150, 0), new THREE.Vector3(0, 0, -1)); }
+function backToRoam() {
+  camera.up.set(0, 1, 0);
+  animatingCamera = false;
+  showToast('已切回漫游，点击画面或按 E 锁定鼠标后即可移动');
+  lockOverlay.classList.remove('hidden');
+}
+
+/* =========================================================================
+   Input: keyboard
+   ========================================================================= */
+const move = { f: 0, b: 0, l: 0, r: 0, up: 0, down: 0, boost: false };
+
+window.addEventListener('keydown', (e) => {
+  switch (e.code) {
+    case 'KeyW': move.f = 1; break;
+    case 'KeyS': move.b = 1; break;
+    case 'KeyA': move.l = 1; break;
+    case 'KeyD': move.r = 1; break;
+    case 'Space': move.up = 1; e.preventDefault(); break;
+    case 'ControlLeft': case 'ControlRight': move.down = 1; break;
+    case 'ShiftLeft': case 'ShiftRight': move.boost = true; break;
+    case 'KeyE':
+      ensureAudio();
+      if (controls.isLocked) controls.unlock(); else controls.lock();
+      break;
+  }
+});
+window.addEventListener('keyup', (e) => {
+  switch (e.code) {
+    case 'KeyW': move.f = 0; break;
+    case 'KeyS': move.b = 0; break;
+    case 'KeyA': move.l = 0; break;
+    case 'KeyD': move.r = 0; break;
+    case 'Space': move.up = 0; break;
+    case 'ControlLeft': case 'ControlRight': move.down = 0; break;
+    case 'ShiftLeft': case 'ShiftRight': move.boost = false; break;
+  }
+});
+
+// Mouse place / destroy when locked
+renderer.domElement.addEventListener('mousedown', (e) => {
+  if (!controls.isLocked) return;
+  if (e.button === 0) doPlace();
+  else if (e.button === 2) doDestroy();
+});
+window.addEventListener('contextmenu', (e) => e.preventDefault());
+
+/* =========================================================================
+   Input: virtual / touch buttons
+   ========================================================================= */
+function holdButton(id, on, off) {
+  const el = document.getElementById(id);
+  const start = (e) => { e.preventDefault(); el.classList.add('held'); on(); };
+  const end = (e) => { if (e) e.preventDefault(); el.classList.remove('held'); if (off) off(); };
+  el.addEventListener('touchstart', start, { passive: false });
+  el.addEventListener('touchend', end, { passive: false });
+  el.addEventListener('touchcancel', end, { passive: false });
+  el.addEventListener('mousedown', start);
+  el.addEventListener('mouseup', end);
+  el.addEventListener('mouseleave', () => el.classList.remove('held'));
+}
+holdButton('vW', () => move.f = 1, () => move.f = 0);
+holdButton('vS', () => move.b = 1, () => move.b = 0);
+holdButton('vA', () => move.l = 1, () => move.l = 0);
+holdButton('vD', () => move.r = 1, () => move.r = 0);
+holdButton('vUp', () => move.up = 1, () => move.up = 0);
+holdButton('vDown', () => move.down = 1, () => move.down = 0);
+holdButton('vShift', () => move.boost = true, () => move.boost = false);
+
+function tapButton(id, fn) {
+  const el = document.getElementById(id);
+  el.addEventListener('touchstart', (e) => { e.preventDefault(); fn(); }, { passive: false });
+  el.addEventListener('click', (e) => { e.preventDefault(); fn(); });
+}
+// Touch place/destroy ignore pointer-lock requirement
+tapButton('vPlace', () => { ensureAudio(); touchPlace(); });
+tapButton('vDestroy', () => { ensureAudio(); touchDestroy(); });
+
+// Touch variants that don't require pointer lock (use center ray)
+function touchPlace() {
+  if (animatingCamera) return;
+  const cand = computeCandidate();
+  if (cand && !blocks.has(keyOf(cand.gx, cand.gy, cand.gz))) {
+    if (addBlock(cand.gx, cand.gy, cand.gz)) { swingHand(); sfxPlace(); }
+  }
+}
+function touchDestroy() {
+  if (animatingCamera) return;
+  raycaster.setFromCamera(centerNDC, camera);
+  const hits = raycaster.intersectObjects(blockMeshes, false);
+  if (hits.length) { removeBlockMesh(hits[0].object); swingHand(); sfxDestroy(); }
+}
+
+/* =========================================================================
+   Top / camera buttons
+   ========================================================================= */
+document.getElementById('btnSubmit').addEventListener('click', submitValidation);
+document.getElementById('btnDemo').addEventListener('click', answerDemo);
+document.getElementById('btnClear').addEventListener('click', () => { clearBlocks(); showToast('已清空'); });
+document.getElementById('btnFree').addEventListener('click', enterFreeDrawMode);
+btnSave.addEventListener('click', () => {
+  if (target.front === '0'.repeat(25) && target.left === '0'.repeat(25) && target.top === '0'.repeat(25)) {
+    showToast('请先在三视图里画出题目'); return;
+  }
+  showToast('✏️ 已保存当前题目，开始搭出对应的立体图形吧！');
+});
+document.getElementById('btnViewFront').addEventListener('click', viewFront);
+document.getElementById('btnViewLeft').addEventListener('click', viewLeft);
+document.getElementById('btnViewTop').addEventListener('click', viewTop);
+document.getElementById('btnRoam').addEventListener('click', backToRoam);
+
+/* =========================================================================
+   Toast helper
+   ========================================================================= */
+const toastEl = document.getElementById('toast');
+let toastTimer = null;
+function showToast(msg) {
+  toastEl.textContent = msg;
+  toastEl.classList.add('show');
+  if (toastTimer) clearTimeout(toastTimer);
+  toastTimer = setTimeout(() => toastEl.classList.remove('show'), 2600);
+}
+
+/* =========================================================================
+   Resize
+   ========================================================================= */
+window.addEventListener('resize', () => {
+  camera.aspect = window.innerWidth / window.innerHeight;
+  camera.updateProjectionMatrix();
+  renderer.setSize(window.innerWidth, window.innerHeight);
+});
+
+/* =========================================================================
+   Animation loop
+   ========================================================================= */
+let lastTime = performance.now();
+function animate() {
+  requestAnimationFrame(animate);
+  const now = performance.now();
+  const dt = Math.min((now - lastTime) / 1000, 0.1);
+  lastTime = now;
+
+  if (typeof TWEEN !== 'undefined') TWEEN.update();
+
+  // Movement (only when locked and not animating camera)
+  if (controls.isLocked && !animatingCamera) {
+    const speed = (move.boost ? 900 : 360) * dt;
+    if (move.f) controls.moveForward(speed);
+    if (move.b) controls.moveForward(-speed);
+    if (move.r) controls.moveRight(speed);
+    if (move.l) controls.moveRight(-speed);
+    if (move.up) camera.position.y += speed;
+    if (move.down) camera.position.y -= speed;
+    if (camera.position.y < 40) camera.position.y = 40;
+  }
+
+  // Hand only visible in first-person roam (hidden during preset / overview views)
+  hand.visible = controls.isLocked && !animatingCamera;
+
+  // Hand animation
+  if (handSwing > 0) {
+    handSwing = Math.max(0, handSwing - dt * 4);
+    hand.rotation.x = -Math.sin(handSwing * Math.PI) * 0.9;
+  } else {
+    hand.rotation.x = 0;
+  }
+
+  updatePreview();
+  updateParticles(dt);
+  renderer.render(scene, camera);
+}
+
+/* =========================================================================
+   Init
+   ========================================================================= */
+buildGrids();
+loadLevel(0);
+animate();
+</script>
+</body>
+</html>
