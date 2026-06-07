@@ -225,10 +225,12 @@ import { OrbitControls } from 'https://unpkg.com/three@0.184.0/examples/jsm/cont
    Constants & grid definition
    ========================================================================= */
 const BLOCK = 50;                         // block size (units)
+const GROUND_TOP = 25;                    // grass ground surface level
+const LIFT = 130;                         // raise the build area onto a platform
+const PLATFORM_TOP = GROUND_TOP + LIFT;   // top surface of the platform / placement plane
 const X = [-100, -50, 0, 50, 100];        // gx index 0..4
-const Y = [50, 100, 150, 200, 250];       // gy index 0..4
+const Y = [0, 1, 2, 3, 4].map((i) => PLATFORM_TOP + 25 + i * 50); // gy index 0..4
 const Z = [-100, -50, 0, 50, 100];        // gz index 0..4
-const GROUND_TOP = 25;                    // top surface of the base / placement plane
 
 /* =========================================================================
    Renderer / Scene / Camera
@@ -246,8 +248,8 @@ scene.background = new THREE.Color(0x87CEEB);
 scene.fog = new THREE.Fog(0x87CEEB, 900, 2600);
 
 const camera = new THREE.PerspectiveCamera(70, window.innerWidth / window.innerHeight, 1, 6000);
-camera.position.set(380, 300, 460);
-camera.lookAt(0, 125, 0);
+camera.position.set(380, 300 + LIFT, 460);
+camera.lookAt(0, 125 + LIFT, 0);
 
 /* =========================================================================
    Lighting
@@ -331,19 +333,30 @@ ground.position.y = GROUND_TOP;
 ground.receiveShadow = true;
 scene.add(ground);
 
-// Thick base block under the build area
+// Raised platform (pedestal) the build sits on: spans from below the grass up to PLATFORM_TOP
+const platformBottom = GROUND_TOP - 40;
+const platformHeight = PLATFORM_TOP - platformBottom;
 const base = new THREE.Mesh(
-  new THREE.BoxGeometry(320, 80, 320),
+  new THREE.BoxGeometry(300, platformHeight, 300),
   new THREE.MeshLambertMaterial({ color: 0x8d6e63 })
 );
-base.position.set(0, GROUND_TOP - 40, 0);
+base.position.set(0, (PLATFORM_TOP + platformBottom) / 2, 0);
 base.receiveShadow = true;
 base.castShadow = true;
 scene.add(base);
 
-// Grid helper at y = 25.1 (opacity 0.5)
+// Grass-topped lip so the platform reads as a raised patch of ground
+const platformTopFace = new THREE.Mesh(
+  new THREE.BoxGeometry(306, 10, 306),
+  new THREE.MeshLambertMaterial({ map: grassTex })
+);
+platformTopFace.position.set(0, PLATFORM_TOP - 5, 0);
+platformTopFace.receiveShadow = true;
+scene.add(platformTopFace);
+
+// Grid helper on the platform top surface (opacity 0.5)
 const grid = new THREE.GridHelper(250, 5, 0x33691e, 0x558b2f);
-grid.position.y = GROUND_TOP + 0.1;
+grid.position.y = PLATFORM_TOP + 0.1;
 grid.material.opacity = 0.5;
 grid.material.transparent = true;
 scene.add(grid);
@@ -354,7 +367,7 @@ const placementGround = new THREE.Mesh(
   new THREE.MeshBasicMaterial({ visible: false })
 );
 placementGround.rotation.x = -Math.PI / 2;
-placementGround.position.y = GROUND_TOP;
+placementGround.position.y = PLATFORM_TOP;
 scene.add(placementGround);
 
 // Decorative trees
@@ -382,7 +395,7 @@ function makeTree(x, z) {
 /* =========================================================================
    Controls — orbit (default, easy) + first-person roam (optional)
    ========================================================================= */
-const WORLD_CENTER = new THREE.Vector3(0, 125, 0); // centre of the 5x5x5 build region
+const WORLD_CENTER = new THREE.Vector3(0, PLATFORM_TOP + 100, 0); // centre of the 5x5x5 build region
 
 // Orbit camera: drag to rotate, wheel to zoom. The easy default.
 const orbit = new OrbitControls(camera, renderer.domElement);
@@ -863,10 +876,10 @@ function flyTo(pos, look) {
     .start();
 }
 
-function viewFront() { flyTo(new THREE.Vector3(0, 125, 660), WORLD_CENTER.clone()); }
-function viewLeft()  { flyTo(new THREE.Vector3(660, 125, 0), WORLD_CENTER.clone()); }
-function viewTop()   { flyTo(new THREE.Vector3(0, 840, 0.001), WORLD_CENTER.clone()); }
-function viewOrbit() { flyTo(new THREE.Vector3(380, 300, 460), WORLD_CENTER.clone()); showToast('环视视角：拖动旋转，滚轮缩放'); }
+function viewFront() { flyTo(new THREE.Vector3(0, WORLD_CENTER.y, 660), WORLD_CENTER.clone()); }
+function viewLeft()  { flyTo(new THREE.Vector3(660, WORLD_CENTER.y, 0), WORLD_CENTER.clone()); }
+function viewTop()   { flyTo(new THREE.Vector3(0, 840 + LIFT, 0.001), WORLD_CENTER.clone()); }
+function viewOrbit() { flyTo(new THREE.Vector3(380, 300 + LIFT, 460), WORLD_CENTER.clone()); showToast('环视视角：拖动旋转，滚轮缩放'); }
 
 function backToRoam() {
   setMode('roam');
