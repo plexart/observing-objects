@@ -28,7 +28,7 @@
 
   /* Left panel: three views */
   #viewsPanel {
-    position: fixed; left: 12px; top: 12px; z-index: 25;
+    position: fixed; left: 12px; top: 12px; z-index: 50;
     background: rgba(255,255,255,0.88); border-radius: 12px; padding: 12px 14px;
     box-shadow: 0 6px 20px rgba(0,0,0,0.25); backdrop-filter: blur(4px);
     max-height: calc(100vh - 24px); overflow: auto;
@@ -51,7 +51,7 @@
 
   /* Top control bar */
   #topBar {
-    position: fixed; top: 12px; left: 50%; transform: translateX(-50%); z-index: 25;
+    position: fixed; top: 12px; left: 50%; transform: translateX(-50%); z-index: 50;
     display: flex; gap: 8px; flex-wrap: wrap; justify-content: center;
     background: rgba(255,255,255,0.85); padding: 8px 12px; border-radius: 12px;
     box-shadow: 0 4px 14px rgba(0,0,0,0.2); max-width: calc(100vw - 320px);
@@ -72,11 +72,11 @@
 
   /* Camera preset buttons */
   #cameraBar {
-    position: fixed; right: 12px; top: 12px; z-index: 25; display: flex; flex-direction: column; gap: 8px;
+    position: fixed; right: 12px; top: 12px; z-index: 50; display: flex; flex-direction: column; gap: 8px;
   }
 
   /* Bottom virtual controls */
-  #touchControls { position: fixed; bottom: 14px; left: 0; right: 0; z-index: 26; pointer-events: none; }
+  #touchControls { position: fixed; bottom: 14px; left: 0; right: 0; z-index: 50; pointer-events: none; }
   #touchControls .pad { position: absolute; pointer-events: auto; }
   #movePad { left: 16px; bottom: 0; display: grid; grid-template-columns: repeat(3, 56px); grid-template-rows: repeat(3, 56px); gap: 6px; }
   #actionPad { right: 16px; bottom: 0; display: grid; grid-template-columns: repeat(2, 64px); grid-template-rows: repeat(2, 64px); gap: 8px; }
@@ -179,6 +179,7 @@
   <button class="btn" id="btnViewFront">🎥 看正视图</button>
   <button class="btn" id="btnViewLeft">🎥 看左视图</button>
   <button class="btn" id="btnViewTop">🚁 看俯视图</button>
+  <button class="btn" id="btnOrbit">🧭 环视视角</button>
   <button class="btn grey" id="btnRoam">🏃 切回漫游</button>
 </div>
 
@@ -202,14 +203,13 @@
 <!-- Lock overlay -->
 <div id="lockOverlay">
   <div class="card">
-    <h1>观察物体（二）· 搭立体图形</h1>
+    <h1>第一人称漫游模式</h1>
     <p>
       用 <b>WASD</b> 移动，<b>鼠标</b> 转动视角，<b>空格</b> 上升 / <b>Ctrl</b> 下降，<b>Shift</b> 加速。<br />
       <b>左键</b> 放置积木 🧱，<b>右键</b> 拆除积木 ⛏️。<br />
-      搭出和左侧三视图一致的立体图形，然后点击「提交验证！」。<br />
-      手机端可使用屏幕上的虚拟按钮。
+      想用更简单的方式？点上方「🧭 环视视角」可拖动旋转、点击放置。
     </p>
-    <p class="play">点击此处 / 按 <b>E</b> 开始</p>
+    <p class="play">点击此处 / 按 <b>E</b> 锁定鼠标开始</p>
   </div>
 </div>
 
@@ -219,6 +219,7 @@
 <script type="module">
 import * as THREE from 'three';
 import { PointerLockControls } from 'https://unpkg.com/three@0.184.0/examples/jsm/controls/PointerLockControls.js';
+import { OrbitControls } from 'https://unpkg.com/three@0.184.0/examples/jsm/controls/OrbitControls.js';
 
 /* =========================================================================
    Constants & grid definition
@@ -245,8 +246,8 @@ scene.background = new THREE.Color(0x87CEEB);
 scene.fog = new THREE.Fog(0x87CEEB, 900, 2600);
 
 const camera = new THREE.PerspectiveCamera(70, window.innerWidth / window.innerHeight, 1, 6000);
-camera.position.set(360, 180, 460);
-camera.lookAt(0, 120, 0);
+camera.position.set(380, 300, 460);
+camera.lookAt(0, 125, 0);
 
 /* =========================================================================
    Lighting
@@ -379,14 +380,55 @@ function makeTree(x, z) {
   .forEach(([x, z]) => makeTree(x, z));
 
 /* =========================================================================
-   Controls (PointerLockControls)
+   Controls — orbit (default, easy) + first-person roam (optional)
    ========================================================================= */
+const WORLD_CENTER = new THREE.Vector3(0, 125, 0); // centre of the 5x5x5 build region
+
+// Orbit camera: drag to rotate, wheel to zoom. The easy default.
+const orbit = new OrbitControls(camera, renderer.domElement);
+orbit.target.copy(WORLD_CENTER);
+orbit.enableDamping = true;
+orbit.dampingFactor = 0.08;
+orbit.minDistance = 200;
+orbit.maxDistance = 1600;
+orbit.maxPolarAngle = Math.PI * 0.515; // allow a level front/left view, but not under the ground
+orbit.update();
+
+// First-person roam (pointer lock) — optional, behind 切回漫游
 const controls = new PointerLockControls(camera, renderer.domElement);
 scene.add(camera);
 
 const lockOverlay = document.getElementById('lockOverlay');
+const crosshair = document.getElementById('crosshair');
+const hud = document.getElementById('hud');
+const movePad = document.getElementById('movePad');
+
+let mode = 'orbit'; // 'orbit' | 'roam'
+
+function setMode(next) {
+  mode = next;
+  if (next === 'orbit') {
+    if (controls.isLocked) controls.unlock();
+    orbit.enabled = true;
+    camera.up.set(0, 1, 0);
+    crosshair.style.display = 'none';
+    lockOverlay.classList.add('hidden');
+    movePad.style.display = 'none';
+    hud.innerHTML = '🖱️ 拖动旋转 · 滚轮缩放 · 点击空地/方块放置 · 右键(或 ⛏️)拆除';
+  } else {
+    orbit.enabled = false;
+    camera.up.set(0, 1, 0);
+    crosshair.style.display = '';
+    movePad.style.display = '';
+    hud.innerHTML = '按 <b>E</b> 锁定/解锁鼠标 · 左键放置 · 右键拆除';
+    lockOverlay.classList.remove('hidden');
+  }
+}
+
 controls.addEventListener('lock', () => lockOverlay.classList.add('hidden'));
-controls.addEventListener('unlock', () => { if (!animatingCamera) lockOverlay.classList.remove('hidden'); });
+controls.addEventListener('unlock', () => {
+  if (mode === 'roam' && !animatingCamera) lockOverlay.classList.remove('hidden');
+});
 
 lockOverlay.addEventListener('click', () => { ensureAudio(); controls.lock(); });
 
@@ -468,8 +510,8 @@ function snapIndex(value, arr) {
   return best;
 }
 
-function computeCandidate() {
-  raycaster.setFromCamera(centerNDC, camera);
+function computeCandidate(ndc) {
+  raycaster.setFromCamera(ndc, camera);
   const targets = [placementGround, ...blockMeshes];
   const hits = raycaster.intersectObjects(targets, false);
   if (!hits.length) return null;
@@ -491,10 +533,21 @@ function computeCandidate() {
   return cand;
 }
 
+// Cursor position in normalised device coords (orbit mode), and whether it's over the canvas.
+const pointerNDC = new THREE.Vector2(0, 0);
+let pointerOverCanvas = false;
+
+// The NDC used for the current interaction: cursor in orbit, screen centre in roam.
+function activeNDC() { return mode === 'roam' ? centerNDC : pointerNDC; }
+
 let currentPlacement = null;
 function updatePreview() {
-  if (!controls.isLocked || animatingCamera) { preview.visible = false; currentPlacement = null; return; }
-  const cand = computeCandidate();
+  let show = !animatingCamera;
+  if (mode === 'roam') show = show && controls.isLocked;
+  else show = show && pointerOverCanvas;
+  if (!show) { preview.visible = false; currentPlacement = null; return; }
+
+  const cand = computeCandidate(activeNDC());
   if (cand && !blocks.has(keyOf(cand.gx, cand.gy, cand.gz))) {
     preview.position.copy(worldOf(cand.gx, cand.gy, cand.gz));
     preview.visible = true;
@@ -506,22 +559,19 @@ function updatePreview() {
 }
 
 /* =========================================================================
-   Place / destroy actions
+   Place / destroy actions (work in both modes; ndc = where to aim)
    ========================================================================= */
-function doPlace() {
-  if (!controls.isLocked || animatingCamera) return;
-  updatePreview();
-  if (currentPlacement) {
-    if (addBlock(currentPlacement.gx, currentPlacement.gy, currentPlacement.gz)) {
-      swingHand();
-      sfxPlace();
-    }
+function doPlace(ndc) {
+  if (animatingCamera) return;
+  const cand = computeCandidate(ndc || activeNDC());
+  if (cand && !blocks.has(keyOf(cand.gx, cand.gy, cand.gz))) {
+    if (addBlock(cand.gx, cand.gy, cand.gz)) { swingHand(); sfxPlace(); }
   }
 }
 
-function doDestroy() {
-  if (!controls.isLocked || animatingCamera) return;
-  raycaster.setFromCamera(centerNDC, camera);
+function doDestroy(ndc) {
+  if (animatingCamera) return;
+  raycaster.setFromCamera(ndc || activeNDC(), camera);
   const hits = raycaster.intersectObjects(blockMeshes, false);
   if (hits.length) {
     removeBlockMesh(hits[0].object);
@@ -785,45 +835,42 @@ function updateParticles(dt) {
    Camera presets (Tween)
    ========================================================================= */
 let animatingCamera = false;
-const lookTarget = new THREE.Vector3(0, 150, 0);
 
-function flyTo(pos, look, up) {
+// Tween the orbit camera to a fixed pose looking at the world centre, then hand
+// control back to OrbitControls so the user can keep dragging from there.
+function flyTo(pos, look) {
+  if (mode !== 'orbit') setMode('orbit');
   animatingCamera = true;
   preview.visible = false;
-  if (controls.isLocked) controls.unlock();
-  lockOverlay.classList.add('hidden');
+  orbit.enabled = false;
 
   const startPos = camera.position.clone();
-  // current look point ~ a point in front of the camera
-  const startLook = camera.getWorldDirection(new THREE.Vector3())
-    .multiplyScalar(300).add(camera.position);
-  const tmpPos = startPos.clone();
-  const tmpLook = startLook.clone();
-  camera.up.set(up.x, up.y, up.z);
-
+  const startTarget = orbit.target.clone();
   const obj = { t: 0 };
   new TWEEN.Tween(obj)
-    .to({ t: 1 }, 1100)
+    .to({ t: 1 }, 1000)
     .easing(TWEEN.Easing.Cubic.InOut)
     .onUpdate(() => {
-      tmpPos.lerpVectors(startPos, pos, obj.t);
-      tmpLook.lerpVectors(startLook, look, obj.t);
-      camera.position.copy(tmpPos);
-      camera.up.set(up.x, up.y, up.z);
-      camera.lookAt(tmpLook);
+      camera.position.lerpVectors(startPos, pos, obj.t);
+      orbit.target.lerpVectors(startTarget, look, obj.t);
+      camera.lookAt(orbit.target);
     })
-    .onComplete(() => { animatingCamera = false; })
+    .onComplete(() => {
+      animatingCamera = false;
+      orbit.enabled = true;
+      orbit.update();
+    })
     .start();
 }
 
-function viewFront() { flyTo(new THREE.Vector3(0, 150, 640), new THREE.Vector3(0, 150, 0), new THREE.Vector3(0, 1, 0)); }
-function viewLeft()  { flyTo(new THREE.Vector3(640, 150, 0), new THREE.Vector3(0, 150, 0), new THREE.Vector3(0, 1, 0)); }
-function viewTop()   { flyTo(new THREE.Vector3(0, 760, 0.01), new THREE.Vector3(0, 150, 0), new THREE.Vector3(0, 0, -1)); }
+function viewFront() { flyTo(new THREE.Vector3(0, 125, 660), WORLD_CENTER.clone()); }
+function viewLeft()  { flyTo(new THREE.Vector3(660, 125, 0), WORLD_CENTER.clone()); }
+function viewTop()   { flyTo(new THREE.Vector3(0, 840, 0.001), WORLD_CENTER.clone()); }
+function viewOrbit() { flyTo(new THREE.Vector3(380, 300, 460), WORLD_CENTER.clone()); showToast('环视视角：拖动旋转，滚轮缩放'); }
+
 function backToRoam() {
-  camera.up.set(0, 1, 0);
-  animatingCamera = false;
-  showToast('已切回漫游，点击画面或按 E 锁定鼠标后即可移动');
-  lockOverlay.classList.remove('hidden');
+  setMode('roam');
+  showToast('已切回第一人称漫游，点击画面或按 E 锁定鼠标后用 WASD 移动');
 }
 
 /* =========================================================================
@@ -841,8 +888,10 @@ window.addEventListener('keydown', (e) => {
     case 'ControlLeft': case 'ControlRight': move.down = 1; break;
     case 'ShiftLeft': case 'ShiftRight': move.boost = true; break;
     case 'KeyE':
-      ensureAudio();
-      if (controls.isLocked) controls.unlock(); else controls.lock();
+      if (mode === 'roam') {
+        ensureAudio();
+        if (controls.isLocked) controls.unlock(); else controls.lock();
+      }
       break;
   }
 });
@@ -858,13 +907,47 @@ window.addEventListener('keyup', (e) => {
   }
 });
 
-// Mouse place / destroy when locked
+// --- Roam (pointer-locked) mouse: place / destroy from screen centre ---
 renderer.domElement.addEventListener('mousedown', (e) => {
-  if (!controls.isLocked) return;
-  if (e.button === 0) doPlace();
-  else if (e.button === 2) doDestroy();
+  if (mode !== 'roam' || !controls.isLocked) return;
+  if (e.button === 0) doPlace(centerNDC);
+  else if (e.button === 2) doDestroy(centerNDC);
 });
 window.addEventListener('contextmenu', (e) => e.preventDefault());
+
+// --- Orbit mode: cursor tracking + click-to-build (distinguish click vs drag) ---
+const canvas = renderer.domElement;
+function updatePointerNDC(e) {
+  const r = canvas.getBoundingClientRect();
+  pointerNDC.x = ((e.clientX - r.left) / r.width) * 2 - 1;
+  pointerNDC.y = -((e.clientY - r.top) / r.height) * 2 + 1;
+}
+canvas.addEventListener('pointermove', (e) => {
+  pointerOverCanvas = true;
+  updatePointerNDC(e);
+});
+canvas.addEventListener('pointerleave', () => { pointerOverCanvas = false; });
+
+let downInfo = null; // { x, y, t, button }
+canvas.addEventListener('pointerdown', (e) => {
+  ensureAudio();
+  if (mode !== 'orbit') return;
+  pointerOverCanvas = true;
+  updatePointerNDC(e);
+  downInfo = { x: e.clientX, y: e.clientY, t: performance.now(), button: e.button };
+});
+canvas.addEventListener('pointerup', (e) => {
+  if (mode !== 'orbit' || !downInfo) return;
+  const moved = Math.hypot(e.clientX - downInfo.x, e.clientY - downInfo.y);
+  const dt = performance.now() - downInfo.t;
+  const isClick = moved < 6 && dt < 400; // not a drag/orbit gesture
+  const btn = downInfo.button;
+  downInfo = null;
+  if (!isClick) return;
+  updatePointerNDC(e);
+  if (btn === 2) doDestroy(pointerNDC);
+  else if (btn === 0) doPlace(pointerNDC);
+});
 
 /* =========================================================================
    Input: virtual / touch buttons
@@ -893,24 +976,9 @@ function tapButton(id, fn) {
   el.addEventListener('touchstart', (e) => { e.preventDefault(); fn(); }, { passive: false });
   el.addEventListener('click', (e) => { e.preventDefault(); fn(); });
 }
-// Touch place/destroy ignore pointer-lock requirement
-tapButton('vPlace', () => { ensureAudio(); touchPlace(); });
-tapButton('vDestroy', () => { ensureAudio(); touchDestroy(); });
-
-// Touch variants that don't require pointer lock (use center ray)
-function touchPlace() {
-  if (animatingCamera) return;
-  const cand = computeCandidate();
-  if (cand && !blocks.has(keyOf(cand.gx, cand.gy, cand.gz))) {
-    if (addBlock(cand.gx, cand.gy, cand.gz)) { swingHand(); sfxPlace(); }
-  }
-}
-function touchDestroy() {
-  if (animatingCamera) return;
-  raycaster.setFromCamera(centerNDC, camera);
-  const hits = raycaster.intersectObjects(blockMeshes, false);
-  if (hits.length) { removeBlockMesh(hits[0].object); swingHand(); sfxDestroy(); }
-}
+// 🧱 / ⛏️ buttons act on screen centre (works in both modes, no pointer lock needed)
+tapButton('vPlace', () => { ensureAudio(); doPlace(centerNDC); });
+tapButton('vDestroy', () => { ensureAudio(); doDestroy(centerNDC); });
 
 /* =========================================================================
    Top / camera buttons
@@ -928,6 +996,7 @@ btnSave.addEventListener('click', () => {
 document.getElementById('btnViewFront').addEventListener('click', viewFront);
 document.getElementById('btnViewLeft').addEventListener('click', viewLeft);
 document.getElementById('btnViewTop').addEventListener('click', viewTop);
+document.getElementById('btnOrbit').addEventListener('click', viewOrbit);
 document.getElementById('btnRoam').addEventListener('click', backToRoam);
 
 /* =========================================================================
@@ -963,8 +1032,11 @@ function animate() {
 
   if (typeof TWEEN !== 'undefined') TWEEN.update();
 
-  // Movement (only when locked and not animating camera)
-  if (controls.isLocked && !animatingCamera) {
+  // Orbit damping (default mode)
+  if (mode === 'orbit' && orbit.enabled) orbit.update();
+
+  // First-person movement (only when locked and not animating camera)
+  if (mode === 'roam' && controls.isLocked && !animatingCamera) {
     const speed = (move.boost ? 900 : 360) * dt;
     if (move.f) controls.moveForward(speed);
     if (move.b) controls.moveForward(-speed);
@@ -975,8 +1047,8 @@ function animate() {
     if (camera.position.y < 40) camera.position.y = 40;
   }
 
-  // Hand only visible in first-person roam (hidden during preset / overview views)
-  hand.visible = controls.isLocked && !animatingCamera;
+  // Hand only visible in first-person roam (hidden during orbit / preset views)
+  hand.visible = mode === 'roam' && controls.isLocked && !animatingCamera;
 
   // Hand animation
   if (handSwing > 0) {
@@ -996,6 +1068,7 @@ function animate() {
    ========================================================================= */
 buildGrids();
 loadLevel(0);
+setMode('orbit');
 animate();
 </script>
 </body>
